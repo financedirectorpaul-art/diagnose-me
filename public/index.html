@@ -265,10 +265,43 @@ async function analyze(){
     }
 
     document.getElementById('app').innerHTML=`
-      <h2>Result</h2>
-      <p><b>${out.nextStep}</b></p>
-      <p>Confidence: ${out.confidence}%</p>
+      <h2>Clinical Assessment</h2>
+
+      <div style="text-align:left">
+        <p style="margin-bottom:12px;font-size:15px">
+          Based on what you’ve described, here’s how I would approach this clinically.
+        </p>
+
+        <h3>Most likely causes</h3>
+        <ul>
+          ${(out.causes || []).map(c => `
+            <li style="margin-bottom:10px">
+              <b>${c.name}</b> (${Math.round(c.confidence <=1 ? c.confidence*100 : c.confidence)}%)<br>
+              <span style="font-size:13px;color:#444">${c.reason}</span>
+            </li>
+          `).join('')}
+        </ul>
+
+        <h3>What I recommend next</h3>
+        <p>${out.nextStep}</p>
+
+        <h3>Red flags — seek urgent care if these occur</h3>
+        <ul>
+          ${(out.redFlags || []).map(r => `<li>${r}</li>`).join('')}
+        </ul>
+
+        <h3>Initial management</h3>
+        <ul>
+          ${(out.treatment || []).map(t => `<li>${t}</li>`).join('')}
+        </ul>
+
+        <div style="margin-top:12px;padding:10px;background:#f5f3ff;border-radius:10px">
+          <b>Clinical confidence:</b> ${Math.round(out.confidence <= 1 ? out.confidence * 100 : out.confidence)}%
+        </div>
+      </div>
+
       ${extra}
+
       <button onclick="step=0;render()">Restart</button>
     `;
 
