@@ -41,13 +41,16 @@
 </div>
 
 <script>
-const AI_ENDPOINT = "https://your-backend-url.onrender.com/analyze";
+// FIX: use same server endpoint when deployed together on Render
+const AI_ENDPOINT = "/analyze";
 
 let mode = "consumer";
 let step = 0;
 let answers = { text:"", imageBase64:"" };
-let usageCount = parseInt(localStorage.getItem('usage')||'0');
-const FREE_LIMIT = 5;
+let usageCount = 0; // force reset for testing
+localStorage.setItem('usage', 0);
+// TEMP: increase limit for testing
+const FREE_LIMIT = 999;
 
 function setMode(m){
   mode = m; step = 0;
@@ -83,6 +86,9 @@ function pricingConsumer(){
       • Priority support
       <br><button class='primary' onclick='checkout("family")'>Choose Family</button>
     </div>
+  </div>
+  <div style="margin-top:15px">
+    <button class='ghost' onclick='resetUsage()'>Reset Usage</button>
   </div>
   <button onclick='render()'>Back</button>`;
 }
@@ -134,6 +140,7 @@ function render(){
         ${usageMeter()}
         <button class="primary" onclick="step=1;render()">Start</button>
         <button class="ghost" onclick="showHistory()">History</button>
+        <button class="ghost" onclick="resetUsage()">Reset Usage</button>
         <button class="ghost" onclick="app.innerHTML=pricingConsumer()">Pricing</button>
       `;
     }
@@ -194,6 +201,12 @@ function saveHistory(out){
   localStorage.setItem('history',JSON.stringify(h));
 }
 
+function resetUsage(){
+  localStorage.setItem('usage', 0);
+  usageCount = 0;
+  render();
+}
+
 function showHistory(){
   let h = JSON.parse(localStorage.getItem('history')||'[]');
   let html = '<h2>History</h2>';
@@ -205,20 +218,11 @@ function showHistory(){
 async function analyze(){
   usageCount++; localStorage.setItem('usage',usageCount);
 
-  if(mode==='consumer' && usageCount>FREE_LIMIT){
-    document.getElementById('app').innerHTML = pricingConsumer();
-    return;
-  }
-
-  if(!AI_ENDPOINT || AI_ENDPOINT.includes("your-backend")){
-    document.getElementById('app').innerHTML=`
-      <h2>Backend Not Connected</h2>
-      <p>You are NOT using real clinical AI yet.</p>
-      <p>Connect your backend to enable specialist-level responses.</p>
-      <button onclick="step=0;render()">Back</button>
-    `;
-    return;
-  }
+  // TEMP: disable paywall during testing
+// if(mode==='consumer' && usageCount>FREE_LIMIT){
+//   document.getElementById('app').innerHTML = pricingConsumer();
+//   return;
+// }
 
   document.getElementById('app').innerHTML="<h2>Analysing with Clinical AI...</h2>";
 
@@ -229,7 +233,16 @@ async function analyze(){
       body:JSON.stringify(answers)
     });
 
+    if(!res.ok){
+      const text = await res.text();
+      throw new Error("Backend error: " + text);
+    }
+
     const out = await res.json();
+
+    if(!out || !out.nextStep){
+      throw new Error("Invalid AI response");
+    }
 
     saveHistory(out);
 
@@ -261,8 +274,9 @@ async function analyze(){
 
   }catch(e){
     document.getElementById('app').innerHTML=`
-      <h2>Error</h2>
-      <p>Clinical AI connection failed.</p>
+      <h2>Connection Issue</h2>
+      <p>${e.message}</p>
+      <p>👉 Check Render logs — likely backend error (API, model, or request format)</p>
       <button onclick="step=0;render()">Back</button>
     `;
   }
