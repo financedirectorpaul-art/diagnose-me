@@ -7,10 +7,10 @@ import { fileURLToPath } from "url";
 
 dotenv.config();
 
-// Fix for __dirname in ES modules
+// Fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const FREE_LIMIT = 9999;
+
 const app = express();
 
 // Middleware
@@ -29,30 +29,31 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// MAIN AI ENDPOINT
+// MAIN ENDPOINT
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
     if (!text) {
-      return res.status(400).json({ error: "No symptoms provided" });
+      return res.status(400).json({
+        error: "No symptoms provided"
+      });
     }
 
     const prompt = `
-You are an experienced general practitioner with specialist-level reasoning.
+You are an experienced GP-level medical assistant.
 
-Given the symptoms below, provide:
-
+Provide:
 1. Top 3 likely causes (ranked)
 2. Confidence for each
-3. Clear explanation
-4. What the user should do next
+3. Clear reasoning
+4. What to do next
 5. Red flags
 6. Basic treatment advice
 
-Be decisive. Avoid vague answers.
+Be clear and practical. Avoid vague responses.
 
-Return JSON ONLY in this format:
+Return ONLY JSON in this format:
 {
   "causes": [
     {"name": "", "confidence": 0, "reason": ""},
@@ -79,7 +80,9 @@ ${text}
       temperature: 0.3
     });
 
-    const content = response.choices[0].message.content;
+    const content = response.choices?.[0]?.message?.content || "{}";
+
+    console.log("AI RESPONSE:", content);
 
     let parsed;
 
@@ -88,7 +91,7 @@ ${text}
     } catch (err) {
       console.error("JSON parse error:", content);
       return res.status(500).json({
-        error: "AI returned invalid format",
+        error: "Invalid AI response format",
         raw: content
       });
     }
