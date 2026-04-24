@@ -10,7 +10,7 @@ dotenv.config();
 // Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
+const FREE_LIMIT = 9999;
 const app = express();
 
 // Middleware
