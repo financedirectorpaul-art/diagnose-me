@@ -15,6 +15,9 @@
     textarea,input{width:100%;margin-top:10px;padding:10px}
     button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
     .suggestion{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
+    .metric{background:#111;color:#fff;padding:10px;margin-top:10px;border-radius:10px}
+    .pill{padding:5px 10px;border-radius:10px;color:#fff}
+    .HIGH{background:#dc2626}.MEDIUM{background:#d97706}.LOW{background:#16a34a}
   </style>
 </head>
 
@@ -28,11 +31,11 @@
 <div class="container">
 
   <div class="sidebar">
-    <div onclick="togglePilotMode()">Pilot Mode</div>
+    <div onclick="togglePilot()">Pilot Mode</div>
 
-    <div onclick="showPersonalTool()">Personal Health Check</div>
+    <div onclick="showPersonal()">Personal Health Check</div>
 
-    <div onclick="showDocumentationAssistant()">Clinical Assistant</div>
+    <div onclick="showClinical()">Clinical Assistant</div>
     <div onclick="showDRG()">DRG Engine</div>
     <div onclick="showMetrics()">Pilot Metrics</div>
   </div>
@@ -41,6 +44,142 @@
 
 </div>
 
-<script src="app.js"></script>
+<script>
+
+// ================= STATE =================
+
+let pilot = localStorage.getItem("pilot") === "true";
+let drg = JSON.parse(localStorage.getItem("drg") || "[]");
+
+updatePilot();
+
+// ================= PILOT =================
+
+function togglePilot(){
+  pilot = !pilot;
+  localStorage.setItem("pilot", pilot);
+  updatePilot();
+}
+
+function updatePilot(){
+  document.getElementById("pilotStatus").innerText =
+    "Pilot Mode: " + (pilot ? "ON" : "OFF");
+}
+
+// ================= PERSONAL AI =================
+
+function showPersonal(){
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Personal Health Check</h2>
+      <textarea id="symptom" placeholder="Describe symptoms"></textarea>
+      <button onclick="runAI()">Analyse</button>
+      <div id="out"></div>
+    </div>
+  `;
+}
+
+async function runAI(){
+  const input = document.getElementById("symptom").value;
+
+  document.getElementById("out").innerHTML = "Analysing...";
+
+  try{
+    const res = await fetch("/ai/personal-check", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ symptoms: input })
+    });
+
+    const data = await res.json();
+
+    if(data.error){
+      document.getElementById("out").innerHTML = "Error: " + data.error;
+      return;
+    }
+
+    document.getElementById("out").innerHTML = `
+      <div class="suggestion">
+        ${data.output.replace(/\n/g,"<br>")}
+      </div>
+      <div class="suggestion">
+        ⚠️ This is general guidance only. Seek medical care if concerned.
+      </div>
+    `;
+
+  }catch(e){
+    document.getElementById("out").innerHTML = "Connection error";
+  }
+}
+
+// ================= CLINICAL =================
+
+function showClinical(){
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Clinical Assistant</h2>
+      <textarea oninput="assist(this.value)"></textarea>
+      <div id="suggestions"></div>
+    </div>
+  `;
+}
+
+function assist(text){
+  let s=[];
+  if(text.includes("pneumonia")) s.push("Consider respiratory failure / sepsis");
+  if(text.includes("depression")) s.push("Add mental health phase + risk");
+
+  document.getElementById("suggestions").innerHTML =
+    s.map(x=>`<div class="suggestion">${x}</div>`).join("");
+}
+
+// ================= DRG =================
+
+function showDRG(){
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>DRG Engine</h2>
+      <input id="dx" placeholder="Diagnosis">
+      <button onclick="runDRG()">Run</button>
+    </div>
+  `;
+}
+
+function runDRG(){
+  let funding = 10000;
+
+  drg.push({funding, actual:0});
+  localStorage.setItem("drg", JSON.stringify(drg));
+
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Estimated Funding</h2>
+      <div class="metric">$${funding}</div>
+    </div>
+  `;
+}
+
+// ================= METRICS =================
+
+function showMetrics(){
+  let predicted = drg.reduce((a,b)=>a+b.funding,0);
+  let actual = drg.reduce((a,b)=>a+b.actual,0);
+
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Pilot Metrics</h2>
+      <div class="metric">Predicted: $${predicted}</div>
+      <div class="metric">Actual: $${actual}</div>
+      <div class="metric">Delta: $${actual - predicted}</div>
+    </div>
+  `;
+}
+
+// ================= INIT =================
+
+showPersonal();
+
+</script>
+
 </body>
 </html>
