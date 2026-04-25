@@ -17,6 +17,7 @@
     .suggestion{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
     .pill{padding:5px 10px;border-radius:10px;color:#fff}
     .HIGH{background:#dc2626}.MEDIUM{background:#d97706}.LOW{background:#16a34a}
+    .error{color:red;margin-top:10px}
   </style>
 </head>
 
@@ -64,7 +65,7 @@ function updatePilot(){
     "Pilot Mode: " + (pilot ? "ON" : "OFF");
 }
 
-// ================= PERSONAL TOOL =================
+// ================= UI =================
 
 function showPersonal(){
   document.getElementById("app").innerHTML = `
@@ -73,12 +74,23 @@ function showPersonal(){
       <textarea id="symptom" placeholder="Describe your symptoms"></textarea>
       <button onclick="startAssessment()">Start Assessment</button>
       <div id="out"></div>
+      <div id="error" class="error"></div>
     </div>
   `;
 }
 
+// ================= AI =================
+
 async function startAssessment(){
+
   const input = document.getElementById("symptom").value;
+
+  if(!input){
+    document.getElementById("error").innerText = "Please enter symptoms.";
+    return;
+  }
+
+  document.getElementById("error").innerText = "";
 
   conversation = {
     symptoms: input,
@@ -93,27 +105,35 @@ async function getAIResponse(){
   document.getElementById("out").innerHTML = "Thinking...";
 
   try{
-    const res = await fetch("/ai/personal-check", {
+
+    const url = window.location.origin + "/ai/personal-check";
+
+    console.log("Calling:", url);
+
+    const res = await fetch(url, {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(conversation)
     });
 
-    const data = await res.json();
-
-    if(data.error){
-      document.getElementById("out").innerHTML = "Error: " + data.error;
-      return;
+    if(!res.ok){
+      const text = await res.text();
+      throw new Error("Server error: " + text);
     }
+
+    const data = await res.json();
 
     renderAI(data);
 
   }catch(e){
-    document.getElementById("out").innerHTML = "Connection error";
+    console.error(e);
+    document.getElementById("out").innerHTML = "";
+    document.getElementById("error").innerText =
+      "Connection error: " + e.message;
   }
 }
 
-// ================= RENDER AI =================
+// ================= RENDER =================
 
 function renderAI(data){
 
@@ -157,7 +177,7 @@ function renderAI(data){
   `;
 }
 
-// ================= HANDLE ANSWERS =================
+// ================= ANSWERS =================
 
 function submitAnswers(count){
 
