@@ -108,68 +108,67 @@ async function getAIResponse(){
 
     const url = window.location.origin + "/ai/personal-check";
 
-    console.log("Calling:", url);
-
     const res = await fetch(url, {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(conversation)
     });
 
-    if(!res.ok){
-      const text = await res.text();
-      throw new Error("Server error: " + text);
-    }
-
     const data = await res.json();
 
     renderAI(data);
 
   }catch(e){
-    console.error(e);
-    document.getElementById("out").innerHTML = "";
     document.getElementById("error").innerText =
       "Connection error: " + e.message;
   }
 }
 
-// ================= RENDER =================
+// ================= SAFE RENDER =================
 
 function renderAI(data){
 
+  // Fallbacks if backend is messy
+  const causes = Array.isArray(data.causes) ? data.causes : ["Unable to determine — please provide more detail"];
+  const reasoning = data.reasoning || data.output || "Clinical reasoning unavailable";
+  const questions = Array.isArray(data.questions) ? data.questions : [];
+  const urgency = data.urgency || "LOW";
+
   const urgencyColor =
-    data.urgency === "HIGH" ? "HIGH" :
-    data.urgency === "MEDIUM" ? "MEDIUM" : "LOW";
+    urgency === "HIGH" ? "HIGH" :
+    urgency === "MEDIUM" ? "MEDIUM" : "LOW";
 
   document.getElementById("out").innerHTML = `
     <div class="suggestion">
       <b>Possible causes:</b><br>
-      ${data.causes.join("<br>")}
+      ${causes.join("<br>")}
     </div>
 
     <div class="suggestion">
       <b>Clinical reasoning:</b><br>
-      ${data.reasoning}
+      ${reasoning}
     </div>
 
     <div class="suggestion">
       <b>Urgency:</b>
-      <span class="pill ${urgencyColor}">${data.urgency}</span>
+      <span class="pill ${urgencyColor}">${urgency}</span>
     </div>
 
     <div class="suggestion">
       <b>Follow-up questions:</b><br>
-      ${data.questions.map((q,i)=>`
+      ${questions.length ? questions.map((q,i)=>`
         <div>
           ${q}<br>
           <input id="q${i}" placeholder="Your answer">
         </div>
-      `).join("")}
+      `).join("") : "No further questions"}
     </div>
 
-    <button onclick="submitAnswers(${data.questions.length})">
-      Continue Assessment
-    </button>
+    ${questions.length ? `
+      <button onclick="submitAnswers(${questions.length})">
+        Continue Assessment
+      </button>
+    ` : ""}
 
     <div class="suggestion">
       ⚠️ This is general guidance only. Seek medical care if concerned.
