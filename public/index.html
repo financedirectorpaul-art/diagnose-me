@@ -15,7 +15,6 @@
     textarea,input{width:100%;margin-top:10px;padding:10px}
     button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
     .suggestion{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
-    .metric{background:#111;color:#fff;padding:10px;margin-top:10px;border-radius:10px}
     .pill{padding:5px 10px;border-radius:10px;color:#fff}
     .HIGH{background:#dc2626}.MEDIUM{background:#d97706}.LOW{background:#16a34a}
   </style>
@@ -32,12 +31,7 @@
 
   <div class="sidebar">
     <div onclick="togglePilot()">Pilot Mode</div>
-
     <div onclick="showPersonal()">Personal Health Check</div>
-
-    <div onclick="showClinical()">Clinical Assistant</div>
-    <div onclick="showDRG()">DRG Engine</div>
-    <div onclick="showMetrics()">Pilot Metrics</div>
   </div>
 
   <div class="content" id="app"></div>
@@ -49,7 +43,11 @@
 // ================= STATE =================
 
 let pilot = localStorage.getItem("pilot") === "true";
-let drg = JSON.parse(localStorage.getItem("drg") || "[]");
+
+let conversation = {
+  symptoms: "",
+  answers: []
+};
 
 updatePilot();
 
@@ -66,29 +64,39 @@ function updatePilot(){
     "Pilot Mode: " + (pilot ? "ON" : "OFF");
 }
 
-// ================= PERSONAL AI =================
+// ================= PERSONAL TOOL =================
 
 function showPersonal(){
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Personal Health Check</h2>
-      <textarea id="symptom" placeholder="Describe symptoms"></textarea>
-      <button onclick="runAI()">Analyse</button>
+      <textarea id="symptom" placeholder="Describe your symptoms"></textarea>
+      <button onclick="startAssessment()">Start Assessment</button>
       <div id="out"></div>
     </div>
   `;
 }
 
-async function runAI(){
+async function startAssessment(){
   const input = document.getElementById("symptom").value;
 
-  document.getElementById("out").innerHTML = "Analysing...";
+  conversation = {
+    symptoms: input,
+    answers: []
+  };
+
+  await getAIResponse();
+}
+
+async function getAIResponse(){
+
+  document.getElementById("out").innerHTML = "Thinking...";
 
   try{
     const res = await fetch("/ai/personal-check", {
       method:"POST",
       headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ symptoms: input })
+      body: JSON.stringify(conversation)
     });
 
     const data = await res.json();
@@ -98,81 +106,69 @@ async function runAI(){
       return;
     }
 
-    document.getElementById("out").innerHTML = `
-      <div class="suggestion">
-        ${data.output.replace(/\n/g,"<br>")}
-      </div>
-      <div class="suggestion">
-        ⚠️ This is general guidance only. Seek medical care if concerned.
-      </div>
-    `;
+    renderAI(data);
 
   }catch(e){
     document.getElementById("out").innerHTML = "Connection error";
   }
 }
 
-// ================= CLINICAL =================
+// ================= RENDER AI =================
 
-function showClinical(){
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>Clinical Assistant</h2>
-      <textarea oninput="assist(this.value)"></textarea>
-      <div id="suggestions"></div>
+function renderAI(data){
+
+  const urgencyColor =
+    data.urgency === "HIGH" ? "HIGH" :
+    data.urgency === "MEDIUM" ? "MEDIUM" : "LOW";
+
+  document.getElementById("out").innerHTML = `
+    <div class="suggestion">
+      <b>Possible causes:</b><br>
+      ${data.causes.join("<br>")}
+    </div>
+
+    <div class="suggestion">
+      <b>Clinical reasoning:</b><br>
+      ${data.reasoning}
+    </div>
+
+    <div class="suggestion">
+      <b>Urgency:</b>
+      <span class="pill ${urgencyColor}">${data.urgency}</span>
+    </div>
+
+    <div class="suggestion">
+      <b>Follow-up questions:</b><br>
+      ${data.questions.map((q,i)=>`
+        <div>
+          ${q}<br>
+          <input id="q${i}" placeholder="Your answer">
+        </div>
+      `).join("")}
+    </div>
+
+    <button onclick="submitAnswers(${data.questions.length})">
+      Continue Assessment
+    </button>
+
+    <div class="suggestion">
+      ⚠️ This is general guidance only. Seek medical care if concerned.
     </div>
   `;
 }
 
-function assist(text){
-  let s=[];
-  if(text.includes("pneumonia")) s.push("Consider respiratory failure / sepsis");
-  if(text.includes("depression")) s.push("Add mental health phase + risk");
+// ================= HANDLE ANSWERS =================
 
-  document.getElementById("suggestions").innerHTML =
-    s.map(x=>`<div class="suggestion">${x}</div>`).join("");
-}
+function submitAnswers(count){
 
-// ================= DRG =================
+  for(let i=0;i<count;i++){
+    const val = document.getElementById("q"+i).value;
+    if(val){
+      conversation.answers.push(val);
+    }
+  }
 
-function showDRG(){
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>DRG Engine</h2>
-      <input id="dx" placeholder="Diagnosis">
-      <button onclick="runDRG()">Run</button>
-    </div>
-  `;
-}
-
-function runDRG(){
-  let funding = 10000;
-
-  drg.push({funding, actual:0});
-  localStorage.setItem("drg", JSON.stringify(drg));
-
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>Estimated Funding</h2>
-      <div class="metric">$${funding}</div>
-    </div>
-  `;
-}
-
-// ================= METRICS =================
-
-function showMetrics(){
-  let predicted = drg.reduce((a,b)=>a+b.funding,0);
-  let actual = drg.reduce((a,b)=>a+b.actual,0);
-
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>Pilot Metrics</h2>
-      <div class="metric">Predicted: $${predicted}</div>
-      <div class="metric">Actual: $${actual}</div>
-      <div class="metric">Delta: $${actual - predicted}</div>
-    </div>
-  `;
+  getAIResponse();
 }
 
 // ================= INIT =================
