@@ -1,216 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Diagnose Me — Clinical Revenue Protection Platform</title>
+  <title>Diagnose Me</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
-    body{font-family:Inter,Arial;background:#0b0720;color:#e5e7eb;margin:0}
-    .topbar{background:#0f0a2a;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1f1a44}
-    .container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 60px)}
-    .sidebar{background:#120d2f;padding:20px;border-right:1px solid #1f1a44}
-    .sidebar div{margin-bottom:12px;cursor:pointer;color:#d8d5ff}.sidebar div:hover{color:white}
-    .content{padding:20px;overflow:auto}
-    .card{background:#fff;color:#111;border-radius:16px;padding:20px;margin-bottom:20px;box-shadow:0 12px 35px rgba(0,0,0,.25)}
-    textarea,input,select{width:100%;min-height:42px;margin-top:10px;padding:10px;border-radius:10px;border:1px solid #ddd;box-sizing:border-box}
-    textarea{min-height:150px}
-    button{margin-top:10px;margin-right:8px;padding:10px 12px;border:none;border-radius:10px;background:#6d28d9;color:white;cursor:pointer;font-weight:700}
-    .ghost{background:#eee;color:#111}
-    .metric{display:inline-block;background:#111;color:#fff;padding:12px 14px;margin:5px;border-radius:12px}
-    .suggestion{background:#f5f3ff;padding:12px;border-radius:12px;margin:10px 0;border-left:5px solid #6d28d9}
+    body{font-family:Arial;background:#0b0720;color:#fff;margin:0}
+    .topbar{padding:15px;background:#120d2f;display:flex;justify-content:space-between}
+    .container{display:grid;grid-template-columns:250px 1fr;height:calc(100vh - 60px)}
+    .sidebar{background:#120d2f;padding:15px}
+    .sidebar div{margin-bottom:10px;cursor:pointer}
+    .content{padding:20px}
+    .card{background:#fff;color:#111;padding:20px;border-radius:12px;margin-bottom:20px}
+    textarea,input{width:100%;margin-top:10px;padding:10px}
+    button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
+    .suggestion{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
   </style>
 </head>
+
 <body>
 
-<div class="topbar" id="topbar">
-  <div><b>Diagnose Me</b> — Clinical Revenue Protection</div>
+<div class="topbar">
+  <div><b>Diagnose Me</b></div>
   <div id="pilotStatus"></div>
 </div>
 
 <div class="container">
+
   <div class="sidebar">
     <div onclick="togglePilotMode()">Pilot Mode</div>
-    <div onclick="showDocumentationAssistant()">Live Documentation Assistant</div>
-    <div onclick="showPilotMetrics()">Pilot Metrics</div>
-      <div onclick="showPersonalTool()">Personal Health Check</div>
+
+    <div onclick="showPersonalTool()">Personal Health Check</div>
+
+    <div onclick="showDocumentationAssistant()">Clinical Assistant</div>
+    <div onclick="showDRG()">DRG Engine</div>
+    <div onclick="showMetrics()">Pilot Metrics</div>
   </div>
+
   <div class="content" id="app"></div>
+
 </div>
 
-<script>
-
-// ✅ PILOT MODE IMPLEMENTED
-let pilotMode = localStorage.getItem('pilotMode') === 'true';
-
-function updatePilotUI(){
-  document.getElementById('pilotStatus').innerHTML = `
-    <span style="font-size:12px;color:#aaa;">
-      Pilot Mode: <b style="color:${pilotMode?'#22c55e':'#ef4444'}">${pilotMode?'ON':'OFF'}</b>
-    </span>
-  `;
-}
-
-function togglePilotMode(){
-  pilotMode = !pilotMode;
-  localStorage.setItem('pilotMode', pilotMode);
-  updatePilotUI();
-  alert("Pilot Mode is now: " + (pilotMode ? "ON ✅" : "OFF ❌"));
-}
-
-updatePilotUI();
-
-// BASIC SCREEN
-// ================= PERSONAL TOOL =================
-function showPersonalTool(){
-  document.getElementById("app").innerHTML=`
-    <div class="card">
-      <h2>Personal Health Check</h2>
-      <p class="muted">Describe your symptoms. This tool provides general guidance only and does not replace medical advice.</p>
-      <textarea id="symptomInput" placeholder="e.g. swollen big toe, very painful"></textarea>
-      <button onclick="runPersonalCheck()">Analyse Symptoms</button>
-      <div id="personalOutput"></div>
-    </div>`;
-}
-
-function runPersonalCheck(){
-  const input=document.getElementById("symptomInput").value.toLowerCase();
-
-  let response="";
-  let followUps="";
-  let urgency="LOW";
-
-  if(input.includes("toe") && input.includes("pain")){
-    response=`
-      <b>Possible causes:</b><br>
-      • Gout (sudden inflammation due to uric acid)<br>
-      • Infection (if redness, warmth, fever present)<br>
-      • Trauma or sprain<br><br>
-      <b>Clinical reasoning:</b><br>
-      Sudden onset pain in the big toe is classically associated with gout, particularly if severe and tender to touch.
-    `;
-
-    followUps=`
-      • Did the pain start suddenly overnight?<br>
-      • Is the joint red, hot, or swollen?<br>
-      • Any recent injury?<br>
-      • History of gout or high uric acid?
-    `;
-
-    urgency="MEDIUM";
-  }
-
-  if(input.includes("chest pain")){
-    response=`
-      <b>Possible causes:</b><br>
-      • Cardiac-related (e.g. angina or heart attack)<br>
-      • Musculoskeletal pain<br>
-      • Reflux or gastrointestinal causes<br><br>
-      <b>Clinical reasoning:</b><br>
-      Chest pain must always be treated cautiously as serious cardiac causes need to be excluded.
-    `;
-
-    followUps=`
-      • Is the pain crushing or tight?<br>
-      • Does it radiate to arm or jaw?<br>
-      • Any shortness of breath or sweating?
-    `;
-
-    urgency="HIGH";
-  }
-
-  if(!response){
-    response="No specific pattern detected. Consider providing more detail about symptoms, timing, and severity.";
-    followUps="• When did symptoms start?<br>• Any worsening or triggers?<br>• Any other associated symptoms?";
-  }
-
-  document.getElementById("personalOutput").innerHTML=`
-    <div class="suggestion">
-      <b>Assessment:</b><br>${response}
-    </div>
-    <div class="suggestion">
-      <b>Follow-up questions:</b><br>${followUps}
-    </div>
-    <div class="suggestion">
-      <b>Urgency:</b> ${urgency === 'HIGH' ? '<span class="pill HIGH">URGENT</span>' : urgency === 'MEDIUM' ? '<span class="pill MEDIUM">MODERATE</span>' : '<span class="pill LOW">LOW</span>'}
-    </div>
-    <div class="suggestion">
-      <b>Advice:</b><br>
-      If symptoms are severe, worsening, or concerning, seek medical attention promptly. In emergencies, contact local emergency services.
-    </div>
-  `;
-}
-
-// ================= CLINICAL PLATFORM =================
-function showDocumentationAssistant(){
-  document.getElementById('app').innerHTML=`
-    <div class="card">
-      <h2>Live Documentation Assistant</h2>
-      <p>Type notes. Pilot Mode = <b>${pilotMode?'ACTIVE':'INACTIVE'}</b></p>
-      <textarea oninput="handleInput(this.value)"></textarea>
-      <div id="suggestions"></div>
-    </div>
-  `;
-}
-
-async function showPilotMetrics(){
-  let data = await api('/pilot/metrics');
-
-  if(!data){
-    data = {
-      totalEpisodes: 18,
-      predicted: 126000,
-      actual: 151000,
-      delta: 25000,
-      avgDelta: 1389,
-      completionRate: 72
-    };
-  }
-
-  document.getElementById('app').innerHTML=`
-    <div class="card">
-      <h2>Pilot Metrics Engine</h2>
-      <p>Tracks the measurable value created during a hospital pilot.</p>
-      <div class="metric">Episodes: ${data.totalEpisodes}</div>
-      <div class="metric">Predicted Funding: $${Number(data.predicted||0).toLocaleString()}</div>
-      <div class="metric">Actual Funding: $${Number(data.actual||0).toLocaleString()}</div>
-      <div class="metric">Net Impact: $${Number(data.delta||0).toLocaleString()}</div>
-      <div class="metric">Avg Impact / Episode: $${Number(data.avgDelta||0).toLocaleString()}</div>
-      <div class="metric">Completion: ${data.completionRate||0}%</div>
-    </div>
-
-    <div class="card">
-      <h3>Executive Interpretation</h3>
-      <div class="suggestion">
-        <b>Business case:</b><br>
-        The pilot is measuring whether improved documentation and coding completeness produces a verified funding integrity uplift.
-      </div>
-      <div class="suggestion">
-        <b>Procurement message:</b><br>
-        If this result is sustained, the platform can justify purchase through recovered or protected revenue alone.
-      </div>
-      <button onclick="window.print()">Export Pilot Metrics Report</button>
-    </div>
-  `;
-}
-
-function handleInput(text){
-  const t=text.toLowerCase();
-  let s=[];
-
-  if(t.includes('pneumonia')){
-    s.push('Consider documenting respiratory failure or sepsis if present');
-  }
-
-  if(t.includes('depression')){
-    s.push('Add mental health phase, risk, and functional impairment');
-  }
-
-  document.getElementById('suggestions').innerHTML=
-    s.map(x=>`<div class="suggestion">${x}</div>`).join('');
-}
-
-showDocumentationAssistant();
-
-</script>
+<script src="app.js"></script>
 </body>
 </html>
