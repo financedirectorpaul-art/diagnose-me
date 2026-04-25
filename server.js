@@ -2,115 +2,130 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import OpenAI from "openai";
-import path from "path";
-import { fileURLToPath } from "url";
 
 dotenv.config();
 
-// Fix for __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
-
-// Middleware
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json());
 
-// Serve frontend
-app.use(express.static(path.join(__dirname, "public")));
+// ================= OPENAI =================
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// OpenAI setup
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// MAIN ENDPOINT
-app.post("/analyze", async (req, res) => {
-  try {
-    const { text } = req.body;
+// ================= HEALTH CHECK =================
 
-    if (!text) {
-      return res.status(400).json({
-        error: "No symptoms provided"
-      });
+app.get("/", (req, res) => {
+  res.send("Diagnose Me backend running");
+});
+
+// ================= PERSONAL AI TOOL =================
+
+app.post("/ai/personal-check", async (req, res) => {
+  try {
+    const { symptoms } = req.body;
+
+    if (!symptoms) {
+      return res.status(400).json({ error: "Symptoms required" });
     }
 
-    const prompt = `
-You are an experienced GP-level medical assistant.
-
-Provide:
-1. Top 3 likely causes (ranked)
-2. Confidence for each
-3. Clear reasoning
-4. What to do next
-5. Red flags
-6. Basic treatment advice
-
-Be clear and practical. Avoid vague responses.
-
-Return ONLY JSON in this format:
-{
-  "causes": [
-    {"name": "", "confidence": 0, "reason": ""},
-    {"name": "", "confidence": 0, "reason": ""},
-    {"name": "", "confidence": 0, "reason": ""}
-  ],
-  "nextStep": "",
-  "urgency": "LOW | MEDIUM | HIGH | EMERGENCY",
-  "confidence": 0,
-  "redFlags": [],
-  "treatment": []
-}
-
-Symptoms:
-${text}
-`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
       messages: [
-        { role: "system", content: "You are a clinical AI assistant." },
-        { role: "user", content: prompt }
+        {
+          role: "system",
+          content: `
+You are a cautious clinical assistant.
+
+DO NOT provide a diagnosis.
+
+Return:
+1. Possible causes
+2. Clinical reasoning
+3. Follow-up questions
+4. Urgency level (LOW, MEDIUM, HIGH)
+
+Be clear, structured, and safe.
+          `
+        },
+        {
+          role: "user",
+          content: symptoms
+        }
       ],
-      temperature: 0.3
+      temperature: 0.4
     });
 
-    const content = response.choices?.[0]?.message?.content || "{}";
+    res.json({
+      output: completion.choices[0].message.content
+    });
 
-    console.log("AI RESPONSE:", content);
-
-    let parsed;
-
-    try {
-      parsed = JSON.parse(content);
-    } catch (err) {
-      console.error("JSON parse error:", content);
-      return res.status(500).json({
-        error: "Invalid AI response format",
-        raw: content
-      });
-    }
-
-    res.json(parsed);
-
-  } catch (error) {
-    console.error("Backend error:", error);
-
+  } catch (err) {
+    console.error(err);
     res.status(500).json({
       error: "Clinical AI failed",
-      details: error.message
+      details: err.message
     });
   }
 });
 
-// Start server
-const PORT = process.env.PORT || 3001;
+// ================= PILOT TRACKING =================
+
+let pilotData = [];
+
+app.post("/pilot/track", (req, res) => {
+  const body = req.body;
+
+  const record = {
+    id: Date.now(),
+    episodeId: body.episodeId,
+    patientId: body.patientId,
+    predictedFunding: body.predictedFunding || 0,
+    actualFunding: body.actualFunding || 0,
+    createdAt: new Date()
+  };
+
+  pilotData.push(record);
+
+  res.json({ success: true });
+});
+
+// ================= PILOT METRICS =================
+
+app.get("/pilot/metrics", (req, res) => {
+  const totalEpisodes = pilotData.length;
+
+  const predicted = pilotData.reduce(
+    (a, b) => a + (b.predictedFunding || 0),
+    0
+  );
+
+  const actual = pilotData.reduce(
+    (a, b) => a + (b.actualFunding || 0),
+    0
+  );
+
+  const delta = actual - predicted;
+
+  const avgDelta =
+    totalEpisodes > 0 ? Math.round(delta / totalEpisodes) : 0;
+
+  res.json({
+    totalEpisodes,
+    predicted,
+    actual,
+    delta,
+    avgDelta,
+    completionRate: totalEpisodes ? 100 : 0
+  });
+});
+
+// ================= START SERVER =================
+
+const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log("Server running on port " + PORT);
 });
