@@ -6,15 +6,16 @@
 
   <style>
     body{font-family:Arial;background:#0f172a;margin:0;color:#e5e7eb}
-    .topbar{padding:15px;background:#020617}
+    .topbar{padding:15px;background:#020617;font-weight:bold}
     .container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 60px)}
     .sidebar{background:#020617;padding:20px}
-    .sidebar div{margin-bottom:10px;cursor:pointer}
-    .content{padding:20px}
+    .sidebar div{margin-bottom:12px;cursor:pointer}
+    .content{padding:25px}
     .card{background:#020617;padding:20px;border-radius:12px;margin-bottom:20px}
-    textarea,input{width:100%;padding:10px;margin-top:10px;background:#0f172a;color:white;border:1px solid #334155}
-    button{margin-top:10px;padding:10px;background:#7c3aed;color:white;border:none}
-    .box{background:#1e293b;padding:10px;margin-top:10px;border-radius:8px}
+    textarea,input{width:100%;padding:12px;margin-top:10px;background:#0f172a;color:white;border:1px solid #334155;border-radius:8px}
+    button{margin-top:12px;padding:12px;background:#7c3aed;color:white;border:none;border-radius:8px}
+    .box{background:#1e293b;padding:12px;margin-top:10px;border-radius:8px}
+    h2{margin-top:0}
   </style>
 </head>
 
@@ -25,12 +26,12 @@
 <div class="container">
 
 <div class="sidebar">
-  <div onclick="showHome()">Home</div>
-  <div onclick="showPersonal()">Clinical AI</div>
-  <div onclick="showClinical()">Clinical Assistant</div>
-  <div onclick="showDRG()">DRG Engine</div>
-  <div onclick="showCases()">Cases</div>
-  <div onclick="showMetrics()">Metrics</div>
+  <div onclick="showHome()">Dashboard</div>
+  <div onclick="showPersonal()">Clinical Assessment</div>
+  <div onclick="showClinical()">Documentation Assistant</div>
+  <div onclick="showDRG()">Funding Estimator</div>
+  <div onclick="showCases()">Case Tracking</div>
+  <div onclick="showMetrics()">Performance Metrics</div>
 </div>
 
 <div class="content" id="app"></div>
@@ -41,30 +42,61 @@
 
 let conversation = { symptoms:"", answers:[] };
 
+// ================= HOME =================
+
 function showHome(){
-  document.getElementById("app").innerHTML = `<div class="card">Platform Ready</div>`;
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Welcome</h2>
+      <p>This platform helps you:</p>
+      <ul>
+        <li>Assess clinical symptoms</li>
+        <li>Improve clinical documentation</li>
+        <li>Estimate hospital funding</li>
+        <li>Track revenue performance</li>
+      </ul>
+    </div>
+  `;
 }
 
-// ================= PERSONAL =================
+// ================= CLINICAL AI =================
 
 function showPersonal(){
   conversation = { symptoms:"", answers:[] };
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <textarea id="symptom"></textarea>
-      <button onclick="start()">Start</button>
+      <h2>Clinical Assessment</h2>
+
+      <p><b>Step 1: Describe the symptoms</b></p>
+
+      <textarea id="symptom" placeholder="Example: chest pain, fatigue, shortness of breath..."></textarea>
+
+      <button onclick="startAssessment()">Start Clinical Assessment</button>
+
       <div id="out"></div>
     </div>
   `;
 }
 
-async function start(){
-  conversation.symptoms = document.getElementById("symptom").value;
+async function startAssessment(){
+
+  const input = document.getElementById("symptom").value;
+
+  if(!input){
+    alert("Please enter symptoms to begin");
+    return;
+  }
+
+  conversation.symptoms = input;
+
   callAI();
 }
 
 async function callAI(){
+
+  document.getElementById("out").innerHTML = "Analysing clinical information...";
+
   const res = await fetch("/ai/personal-check", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
@@ -74,26 +106,40 @@ async function callAI(){
   const data = await res.json();
 
   document.getElementById("out").innerHTML = `
+    <h3>Possible Conditions</h3>
+
     ${(data.conditions||[]).map(c=>`
       <div class="box">
-        ${c.name} (${c.likelihood})<br>${c.reason}
+        <b>${c.name}</b><br>
+        Likelihood: ${c.likelihood}<br>
+        ${c.reason}
       </div>
     `).join("")}
+
+    <h3>Clinical Assessment Summary</h3>
+    <div class="box">${data.overall_assessment}</div>
+
+    <h3>Follow-up Questions</h3>
 
     ${(data.follow_up_questions||[]).map((q,i)=>`
       <div class="box">
         ${q}
-        <input id="q${i}">
+        <input id="q${i}" placeholder="Enter answer">
       </div>
     `).join("")}
 
     ${(data.follow_up_questions||[]).length ? `
-      <button onclick="submit(${data.follow_up_questions.length})">Continue</button>
+      <button onclick="submitAnswers(${data.follow_up_questions.length})">
+        Continue Assessment
+      </button>
     ` : ""}
+
+    <h3>Urgency Level</h3>
+    <div class="box">${data.urgency}</div>
   `;
 }
 
-function submit(n){
+function submitAnswers(n){
   for(let i=0;i<n;i++){
     let v=document.getElementById("q"+i).value;
     if(v) conversation.answers.push(v);
@@ -101,20 +147,32 @@ function submit(n){
   callAI();
 }
 
-// ================= CLINICAL =================
+// ================= DOCUMENTATION =================
 
 function showClinical(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <textarea id="note"></textarea>
-      <button onclick="analyse()">Analyse</button>
+      <h2>Clinical Documentation Assistant</h2>
+
+      <p><b>Paste clinical notes below</b></p>
+
+      <textarea id="note" placeholder="Example: Patient admitted with pneumonia, SOB, history of COPD..."></textarea>
+
+      <button onclick="analyse()">Analyse Documentation for Coding & Funding</button>
+
       <div id="suggestions"></div>
     </div>
   `;
 }
 
 async function analyse(){
+
   const note = document.getElementById("note").value;
+
+  if(!note){
+    alert("Please enter clinical notes");
+    return;
+  }
 
   const res = await fetch("/ai/clinical-assist",{
     method:"POST",
@@ -133,15 +191,27 @@ async function analyse(){
 function showDRG(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <input id="dx">
-      <button onclick="runDRG()">Run</button>
+      <h2>Hospital Funding Estimator</h2>
+
+      <p><b>Enter primary diagnosis</b></p>
+
+      <input id="dx" placeholder="Example: pneumonia, depression, heart failure">
+
+      <button onclick="runDRG()">Estimate Funding</button>
+
       <div id="out"></div>
     </div>
   `;
 }
 
 async function runDRG(){
+
   const dx=document.getElementById("dx").value;
+
+  if(!dx){
+    alert("Please enter a diagnosis");
+    return;
+  }
 
   const res=await fetch("/drg/estimate",{
     method:"POST",
@@ -152,9 +222,15 @@ async function runDRG(){
   const data=await res.json();
 
   document.getElementById("out").innerHTML=`
-    ${data.funding}
-    <input id="actual">
-    <button onclick="save(${data.funding})">Save</button>
+    <div class="box">
+      Predicted Funding: $${data.funding}
+
+      <p><b>Enter actual funding received</b></p>
+
+      <input id="actual" placeholder="Enter amount">
+
+      <button onclick="save(${data.funding})">Save Case for Tracking</button>
+    </div>
   `;
 }
 
@@ -167,7 +243,7 @@ async function save(predicted){
     body: JSON.stringify({ predicted, actual })
   });
 
-  alert("Saved");
+  alert("Case saved successfully");
 }
 
 // ================= CASES =================
@@ -177,7 +253,9 @@ async function showCases(){
   const data=await res.json();
 
   document.getElementById("app").innerHTML =
-    data.map(r=>`<div class="box">${r.predicted} vs ${r.actual}</div>`).join("");
+    data.map(r=>`<div class="box">
+      Predicted: $${r.predicted} | Actual: $${r.actual} | Variance: $${r.actual-r.predicted}
+    </div>`).join("");
 }
 
 // ================= METRICS =================
@@ -188,10 +266,16 @@ async function showMetrics(){
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      ${d.predicted} / ${d.actual} / ${d.delta}
+      <h2>Performance Metrics</h2>
+      <p>Predicted Revenue: $${d.predicted}</p>
+      <p>Actual Revenue: $${d.actual}</p>
+      <p>Variance: $${d.delta}</p>
+      <p>Total Cases: ${d.total}</p>
     </div>
   `;
 }
+
+// ================= INIT =================
 
 showHome();
 
