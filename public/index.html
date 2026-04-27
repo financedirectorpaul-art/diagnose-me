@@ -1,22 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Diagnose Me Platform</title>
+  <title>Diagnose Me</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
-    body{font-family:Arial;background:#0b0720;color:#fff;margin:0}
-    .topbar{padding:15px;background:#120d2f}
+    body{font-family:-apple-system;background:#0f172a;margin:0;color:#e5e7eb}
+    .topbar{padding:16px;background:#020617;border-bottom:1px solid #1e293b}
     .container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 60px)}
-    .sidebar{background:#120d2f;padding:15px}
-    .sidebar div{margin-bottom:10px;cursor:pointer}
-    .content{padding:20px}
-    .card{background:#fff;color:#111;padding:20px;border-radius:12px;margin-bottom:20px}
-    textarea,input{width:100%;margin-top:10px;padding:10px}
-    button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
-    .box{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{padding:8px;border-bottom:1px solid #ccc}
+    .sidebar{background:#020617;padding:20px;border-right:1px solid #1e293b}
+    .sidebar div{margin-bottom:10px;padding:10px;border-radius:8px;cursor:pointer}
+    .sidebar div:hover{background:#1e293b}
+    .content{padding:30px}
+    .card{background:#020617;border:1px solid #1e293b;padding:20px;border-radius:12px;margin-bottom:20px}
+    textarea,input{width:100%;padding:12px;margin-top:10px;background:#0f172a;border:1px solid #334155;color:white;border-radius:8px}
+    button{margin-top:12px;padding:12px;background:#7c3aed;border:none;border-radius:8px;color:white}
+    .box{background:#0f172a;border:1px solid #334155;padding:10px;border-radius:10px;margin-top:10px}
   </style>
 </head>
 
@@ -27,11 +26,12 @@
 <div class="container">
 
   <div class="sidebar">
-    <div onclick="showHome()">Home</div>
-    <div onclick="showPersonal()">Personal Health Check</div>
+    <div onclick="showHome()">Dashboard</div>
+    <div onclick="showPersonal()">Clinical AI</div>
+    <div onclick="showClinical()">Clinical Assistant</div>
     <div onclick="showDRG()">DRG Engine</div>
-    <div onclick="showCases()">Case Tracking</div>
-    <div onclick="showMetrics()">Metrics</div>
+    <div onclick="showCases()">Case Analytics</div>
+    <div onclick="showMetrics()">Executive View</div>
   </div>
 
   <div class="content" id="app"></div>
@@ -40,17 +40,12 @@
 
 <script>
 
-// ================= STATE =================
-
-let conversation = { symptoms:"", answers:[] };
-let caseData = [];
-
 // ================= HOME =================
 
 function showHome(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Full Platform</h2>
+      <h2>Platform Overview</h2>
       <p>Clinical AI + Hospital Revenue Intelligence</p>
     </div>
   `;
@@ -59,38 +54,28 @@ function showHome(){
 // ================= PERSONAL =================
 
 function showPersonal(){
-  conversation = { symptoms:"", answers:[] };
-
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Personal Health Check</h2>
+      <h2>Clinical AI Diagnosis</h2>
       <textarea id="symptom"></textarea>
-      <button onclick="startAssessment()">Start</button>
-      <div id="result"></div>
+      <button onclick="runAI()">Analyse</button>
+      <div id="out"></div>
     </div>
   `;
 }
 
-async function startAssessment(){
-  conversation.symptoms = document.getElementById("symptom").value;
-  callAI();
-}
+async function runAI(){
+  const input = document.getElementById("symptom").value;
 
-async function callAI(){
-
-  document.getElementById("result").innerHTML = "Thinking...";
-
-  const res = await fetch("/ai/personal-check", {
+  const res = await fetch("/ai/personal-check",{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(conversation)
+    body: JSON.stringify({ symptoms: input })
   });
 
   const data = await res.json();
 
-  document.getElementById("result").innerHTML = `
-    <h3>Conditions</h3>
-
+  document.getElementById("out").innerHTML = `
     ${(data.conditions||[]).map(c=>`
       <div class="box">
         <b>${c.name}</b><br>
@@ -98,34 +83,38 @@ async function callAI(){
         ${c.reason}
       </div>
     `).join("")}
-
-    <h3>Assessment</h3>
-    <div class="box">${data.overall_assessment}</div>
-
-    <h3>Follow-up</h3>
-
-    ${(data.follow_up_questions||[]).map((q,i)=>`
-      <div class="box">
-        ${q}
-        <input id="q${i}">
-      </div>
-    `).join("")}
-
-    ${(data.follow_up_questions||[]).length ? `
-      <button onclick="submitAnswers(${data.follow_up_questions.length})">Continue</button>
-    ` : ""}
-
-    <h3>Urgency</h3>
-    <div class="box">${data.urgency}</div>
   `;
 }
 
-function submitAnswers(n){
-  for(let i=0;i<n;i++){
-    let v = document.getElementById("q"+i).value;
-    if(v) conversation.answers.push(v);
-  }
-  callAI();
+// ================= CLINICAL ASSISTANT =================
+
+function showClinical(){
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Clinical Documentation Assistant</h2>
+      <textarea id="note" placeholder="Paste clinical notes..."></textarea>
+      <button onclick="analyseNote()">Analyse Documentation</button>
+      <div id="suggestions"></div>
+    </div>
+  `;
+}
+
+async function analyseNote(){
+
+  const note = document.getElementById("note").value;
+
+  const res = await fetch("/ai/clinical-assist", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ note })
+  });
+
+  const data = await res.json();
+
+  document.getElementById("suggestions").innerHTML =
+    (data.suggestions||[]).map(s=>`
+      <div class="box">${s}</div>
+    `).join("");
 }
 
 // ================= DRG =================
@@ -142,29 +131,29 @@ function showDRG(){
 }
 
 async function runDRG(){
+  const dx = document.getElementById("dx").value;
 
-  const diagnosis = document.getElementById("dx").value;
-
-  const res = await fetch("/drg/estimate", {
+  const res = await fetch("/drg/estimate",{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ diagnosis })
+    body: JSON.stringify({ diagnosis: dx })
   });
 
   const data = await res.json();
 
   document.getElementById("drgOut").innerHTML = `
-    Predicted: $${data.funding}<br>
-    <input id="actual" placeholder="Actual funding">
-    <button onclick="saveCase(${data.funding})">Save Case</button>
+    <div class="box">
+      Predicted: $${data.funding}
+      <input id="actual">
+      <button onclick="saveCase(${data.funding})">Save</button>
+    </div>
   `;
 }
 
 async function saveCase(predicted){
+  const actual = Number(document.getElementById("actual").value||0);
 
-  let actual = Number(document.getElementById("actual").value || 0);
-
-  await fetch("/pilot/track", {
+  await fetch("/pilot/track",{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
     body: JSON.stringify({ predicted, actual })
@@ -176,90 +165,35 @@ async function saveCase(predicted){
 // ================= CASES =================
 
 async function showCases(){
-
   const res = await fetch("/pilot/data");
-  caseData = await res.json();
+  const data = await res.json();
 
-  renderTable(caseData);
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Case Analytics</h2>
+      ${data.map(r=>`
+        <div class="box">
+          $${r.predicted} vs $${r.actual} → ${r.actual - r.predicted}
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 // ================= METRICS =================
 
 async function showMetrics(){
-
   const res = await fetch("/pilot/metrics");
-  const data = await res.json();
+  const d = await res.json();
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Metrics</h2>
-      Predicted: $${data.predicted}<br>
-      Actual: $${data.actual}<br>
-      Variance: $${data.delta}<br>
-      Cases: ${data.total}
+      <h2>Executive View</h2>
+      Predicted: $${d.predicted}<br>
+      Actual: $${d.actual}<br>
+      Variance: $${d.delta}
     </div>
   `;
-}
-
-// ================= TABLE =================
-
-function renderTable(data){
-
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>Case Tracking</h2>
-
-      <button onclick="exportCSV()">Export CSV</button>
-
-      <table>
-        <tr>
-          <th>ID</th>
-          <th>Predicted</th>
-          <th>Actual</th>
-          <th>Variance</th>
-          <th>Date</th>
-        </tr>
-
-        ${data.map(r=>`
-          <tr>
-            <td>${r.id}</td>
-            <td>$${r.predicted}</td>
-            <td>$${r.actual}</td>
-            <td>$${r.actual - r.predicted}</td>
-            <td>${new Date(r.created_at).toLocaleString()}</td>
-          </tr>
-        `).join("")}
-
-      </table>
-    </div>
-  `;
-}
-
-// ================= CSV =================
-
-function exportCSV(){
-
-  let rows = [["ID","Predicted","Actual","Variance","Date"]];
-
-  caseData.forEach(r=>{
-    rows.push([
-      r.id,
-      r.predicted,
-      r.actual,
-      r.actual - r.predicted,
-      r.created_at
-    ]);
-  });
-
-  let csv = rows.map(r=>r.join(",")).join("\n");
-
-  let blob = new Blob([csv]);
-  let url = URL.createObjectURL(blob);
-
-  let a = document.createElement("a");
-  a.href = url;
-  a.download = "cases.csv";
-  a.click();
 }
 
 // ================= INIT =================
@@ -270,3 +204,4 @@ showHome();
 
 </body>
 </html>
+🧠 What this restores
