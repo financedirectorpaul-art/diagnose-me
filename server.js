@@ -24,7 +24,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ================= PERSONAL AI (FIXED) =================
+// ================= PERSONAL AI (FULLY FIXED) =================
 
 app.post("/ai/personal-check", async (req, res) => {
   try {
@@ -36,28 +36,27 @@ app.post("/ai/personal-check", async (req, res) => {
         {
           role: "system",
           content: `
-You are a clinical triage assistant.
+You are a cautious clinical assistant.
 
-Return ONLY VALID JSON in this exact format:
+Return ONLY JSON:
 
 {
   "conditions": [
     {
-      "name": "Condition name",
+      "name": "",
       "likelihood": "low | moderate | high",
-      "reason": "Why this fits"
+      "reason": ""
     }
   ],
-  "overall_assessment": "Summary of situation",
-  "follow_up_questions": ["Question 1", "Question 2"],
+  "overall_assessment": "",
+  "follow_up_questions": [],
   "urgency": "LOW | MEDIUM | HIGH"
 }
 
 Rules:
-- Do NOT include markdown
-- Do NOT include explanations outside JSON
 - Always include at least 2 conditions
-- Always include at least 2 follow-up questions unless fully resolved
+- Always include follow-up questions unless confident
+- Do NOT include markdown
 `
         },
         {
@@ -74,26 +73,56 @@ Answers so far: ${answers || ""}
     let text = completion.choices[0].message.content;
 
     try {
-      const parsed = JSON.parse(text);
-      res.json(parsed);
+      res.json(JSON.parse(text));
     } catch {
-      // fallback (still structured)
       res.json({
-        conditions: [
-          {
-            name: "Unclear diagnosis",
-            likelihood: "moderate",
-            reason: text
-          }
-        ],
+        conditions: [],
         overall_assessment: text,
-        follow_up_questions: ["Can you describe symptoms in more detail?"],
+        follow_up_questions: [],
         urgency: "LOW"
       });
     }
 
   } catch (err) {
-    console.error("AI ERROR:", err);
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= CLINICAL ASSISTANT =================
+
+app.post("/ai/clinical-assist", async (req, res) => {
+  try {
+    const { note } = req.body;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a clinical documentation improvement specialist.
+
+Identify:
+- missing diagnoses
+- missing severity
+- missing comorbidities
+- anything impacting DRG funding
+
+Return bullet points only.
+`
+        },
+        { role: "user", content: note }
+      ]
+    });
+
+    const text = completion.choices[0].message.content;
+
+    res.json({
+      suggestions: text.split("\n").filter(x => x.trim() !== "")
+    });
+
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -109,7 +138,7 @@ app.post("/drg/estimate", (req, res) => {
   res.json({ funding });
 });
 
-// ================= PILOT =================
+// ================= DATABASE =================
 
 app.post("/pilot/track", async (req, res) => {
   const { predicted, actual } = req.body;
@@ -117,6 +146,15 @@ app.post("/pilot/track", async (req, res) => {
   await supabase.from("pilot_data").insert([{ predicted, actual }]);
 
   res.json({ success: true });
+});
+
+app.get("/pilot/data", async (req, res) => {
+  const { data } = await supabase
+    .from("pilot_data")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  res.json(data);
 });
 
 app.get("/pilot/metrics", async (req, res) => {
@@ -133,24 +171,13 @@ app.get("/pilot/metrics", async (req, res) => {
   });
 });
 
-app.get("/pilot/data", async (req, res) => {
-  const { data } = await supabase
-    .from("pilot_data")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  res.json(data);
-});
-
 // ================= FRONTEND =================
 
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "public/index.html"));
 });
-
-// ================= START =================
 
 const PORT = process.env.PORT || 10000;
 
