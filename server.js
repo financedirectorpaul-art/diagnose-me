@@ -64,6 +64,7 @@ Return ONLY JSON:
     try {
       res.json(JSON.parse(text));
     } catch {
+      // fallback if AI returns bad JSON
       res.json({
         causes: ["Unable to determine"],
         reasoning: text,
@@ -73,6 +74,7 @@ Return ONLY JSON:
     }
 
   } catch (err) {
+    console.error("Personal AI error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -88,7 +90,7 @@ app.post("/ai/clinical-assist", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "Identify documentation gaps impacting clinical coding and funding."
+          content: "Identify documentation gaps that could impact clinical coding and funding."
         },
         {
           role: "user",
@@ -100,10 +102,11 @@ app.post("/ai/clinical-assist", async (req, res) => {
     res.json({
       suggestions: completion.choices[0].message.content
         .split("\n")
-        .filter(x => x)
+        .filter(x => x.trim() !== "")
     });
 
   } catch (err) {
+    console.error("Clinical AI error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -111,19 +114,25 @@ app.post("/ai/clinical-assist", async (req, res) => {
 // ================= DRG ENGINE =================
 
 app.post("/drg/estimate", (req, res) => {
-  const { diagnosis } = req.body;
+  try {
+    const { diagnosis } = req.body;
 
-  let drg = "E62B";
-  let weight = 1.2;
+    let drg = "E62B";
+    let weight = 1.2;
 
-  if (diagnosis?.toLowerCase().includes("depression")) {
-    drg = "U60A";
-    weight = 1.8;
+    if (diagnosis?.toLowerCase().includes("depression")) {
+      drg = "U60A";
+      weight = 1.8;
+    }
+
+    const funding = Math.round(weight * 7000);
+
+    res.json({ drg, weight, funding });
+
+  } catch (err) {
+    console.error("DRG error:", err);
+    res.status(500).json({ error: err.message });
   }
-
-  const funding = Math.round(weight * 7000);
-
-  res.json({ drg, weight, funding });
 });
 
 // ================= PILOT TRACK =================
@@ -141,6 +150,7 @@ app.post("/pilot/track", async (req, res) => {
     res.json({ success: true });
 
   } catch (err) {
+    console.error("Pilot track error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -166,6 +176,26 @@ app.get("/pilot/metrics", async (req, res) => {
     });
 
   } catch (err) {
+    console.error("Metrics error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= CASE DATA =================
+
+app.get("/pilot/data", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("pilot_data")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.json(data);
+
+  } catch (err) {
+    console.error("Case data error:", err);
     res.status(500).json({ error: err.message });
   }
 });
