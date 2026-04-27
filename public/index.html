@@ -12,10 +12,12 @@
     .sidebar div{margin-bottom:10px;cursor:pointer}
     .content{padding:20px}
     .card{background:#fff;color:#111;padding:20px;border-radius:12px;margin-bottom:20px}
-    textarea,input,select{width:100%;margin-top:10px;padding:10px}
+    textarea,input{width:100%;margin-top:10px;padding:10px}
     button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
+    .condition{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
+    .metric{background:#111;color:#fff;padding:10px;margin-top:10px;border-radius:10px}
     table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{padding:8px;border-bottom:1px solid #ccc;text-align:left}
+    th,td{padding:8px;border-bottom:1px solid #ccc}
   </style>
 </head>
 
@@ -23,14 +25,13 @@
 
 <div class="topbar">
   <div><b>Diagnose Me Platform</b></div>
-  <div id="pilotStatus"></div>
 </div>
 
 <div class="container">
 
   <div class="sidebar">
-    <div onclick="togglePilot()">Pilot Mode</div>
     <div onclick="showHome()">Home</div>
+    <div onclick="showPersonal()">Personal Health Check</div>
     <div onclick="showDRG()">DRG Engine</div>
     <div onclick="showCases()">Case Tracking</div>
   </div>
@@ -41,25 +42,63 @@
 
 <script>
 
-let pilot = localStorage.getItem("pilot") === "true";
-
-function togglePilot(){
-  pilot = !pilot;
-  localStorage.setItem("pilot", pilot);
-  document.getElementById("pilotStatus").innerText =
-    "Pilot Mode: " + (pilot ? "ON" : "OFF");
-}
-
-togglePilot();
-
 // ================= HOME =================
 
 function showHome(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Revenue Intelligence Dashboard</h2>
-      <p>Analyse funding variance across cases.</p>
+      <h2>Welcome</h2>
+      <p>Use the Personal Health Check or DRG tools.</p>
     </div>
+  `;
+}
+
+// ================= PERSONAL =================
+
+function showPersonal(){
+  document.getElementById("app").innerHTML = `
+    <div class="card">
+      <h2>Personal Health Check</h2>
+      <textarea id="symptom" placeholder="Describe symptoms"></textarea>
+      <button onclick="runDiagnosis()">Analyse</button>
+      <div id="result"></div>
+    </div>
+  `;
+}
+
+async function runDiagnosis(){
+
+  const symptoms = document.getElementById("symptom").value;
+
+  const res = await fetch("/ai/personal-check", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ symptoms })
+  });
+
+  const data = await res.json();
+
+  document.getElementById("result").innerHTML = `
+    <h3>Possible Conditions</h3>
+
+    ${(data.conditions || []).map(c => `
+      <div class="condition">
+        <b>${c.name}</b><br>
+        Likelihood: ${c.likelihood}<br>
+        ${c.reason}
+      </div>
+    `).join("")}
+
+    <h3>Overall Assessment</h3>
+    <div class="condition">${data.overall_assessment}</div>
+
+    <h3>Follow-up Questions</h3>
+    <div class="condition">
+      ${(data.follow_up_questions || []).join("<br>")}
+    </div>
+
+    <h3>Urgency</h3>
+    <div class="condition">${data.urgency}</div>
   `;
 }
 
@@ -71,12 +110,13 @@ function showDRG(){
       <h2>DRG Engine</h2>
       <input id="dx" placeholder="Diagnosis">
       <button onclick="runDRG()">Estimate</button>
-      <div id="out"></div>
+      <div id="drgOut"></div>
     </div>
   `;
 }
 
 async function runDRG(){
+
   const diagnosis = document.getElementById("dx").value;
 
   const res = await fetch("/drg/estimate", {
@@ -87,114 +127,21 @@ async function runDRG(){
 
   const data = await res.json();
 
-  document.getElementById("out").innerHTML = `
-    Predicted: $${data.funding}<br>
-    <input id="actual" placeholder="Actual funding">
-    <button onclick="saveCase(${data.funding})">Save</button>
+  document.getElementById("drgOut").innerHTML = `
+    <div class="metric">Predicted: $${data.funding}</div>
   `;
 }
 
-async function saveCase(predicted){
-  const actual = Number(document.getElementById("actual").value || 0);
-
-  await fetch("/pilot/track", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ predicted, actual })
-  });
-
-  alert("Saved");
-}
-
-// ================= CASE TABLE =================
-
-let caseData = [];
+// ================= CASES =================
 
 async function showCases(){
 
   const res = await fetch("/pilot/data");
-  caseData = await res.json();
-
-  renderTable(caseData);
-}
-
-// ================= FILTER + SORT =================
-
-function applyFilters(){
-
-  let min = Number(document.getElementById("minVar").value || -Infinity);
-  let max = Number(document.getElementById("maxVar").value || Infinity);
-
-  let filtered = caseData.filter(r=>{
-    let v = r.actual - r.predicted;
-    return v >= min && v <= max;
-  });
-
-  renderTable(filtered);
-}
-
-function sortData(field){
-
-  caseData.sort((a,b)=>{
-    if(field==="variance"){
-      return (b.actual-b.predicted) - (a.actual-a.predicted);
-    }
-    if(field==="date"){
-      return new Date(b.created_at) - new Date(a.created_at);
-    }
-  });
-
-  renderTable(caseData);
-}
-
-// ================= CSV EXPORT =================
-
-function exportCSV(){
-
-  let rows = [
-    ["ID","Predicted","Actual","Variance","Date"]
-  ];
-
-  caseData.forEach(r=>{
-    rows.push([
-      r.id,
-      r.predicted,
-      r.actual,
-      r.actual - r.predicted,
-      r.created_at
-    ]);
-  });
-
-  let csv = rows.map(r=>r.join(",")).join("\n");
-
-  let blob = new Blob([csv], { type: "text/csv" });
-  let url = URL.createObjectURL(blob);
-
-  let a = document.createElement("a");
-  a.href = url;
-  a.download = "cases.csv";
-  a.click();
-}
-
-// ================= RENDER =================
-
-function renderTable(data){
+  const data = await res.json();
 
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Case Tracking</h2>
-
-      <h4>Filters</h4>
-      Min Variance: <input id="minVar">
-      Max Variance: <input id="maxVar">
-      <button onclick="applyFilters()">Apply</button>
-
-      <h4>Sort</h4>
-      <button onclick="sortData('variance')">Sort by Variance</button>
-      <button onclick="sortData('date')">Sort by Date</button>
-
-      <h4>Export</h4>
-      <button onclick="exportCSV()">Download CSV</button>
 
       <table>
         <tr>
@@ -202,20 +149,17 @@ function renderTable(data){
           <th>Predicted</th>
           <th>Actual</th>
           <th>Variance</th>
-          <th>Date</th>
         </tr>
 
-        ${data.map(r=>`
+        ${data.map(r => `
           <tr>
             <td>${r.id}</td>
             <td>$${r.predicted}</td>
             <td>$${r.actual}</td>
             <td>$${r.actual - r.predicted}</td>
-            <td>${new Date(r.created_at).toLocaleString()}</td>
           </tr>
         `).join("")}
       </table>
-
     </div>
   `;
 }
