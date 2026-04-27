@@ -5,72 +5,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
-    body{font-family:-apple-system;background:#0f172a;margin:0;color:#e5e7eb}
-    .topbar{padding:16px;background:#020617;border-bottom:1px solid #1e293b}
+    body{font-family:Arial;background:#0f172a;margin:0;color:#e5e7eb}
+    .topbar{padding:15px;background:#020617}
     .container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 60px)}
-    .sidebar{background:#020617;padding:20px;border-right:1px solid #1e293b}
-    .sidebar div{margin-bottom:10px;padding:10px;border-radius:8px;cursor:pointer}
-    .sidebar div:hover{background:#1e293b}
-    .content{padding:30px}
-    .card{background:#020617;border:1px solid #1e293b;padding:20px;border-radius:12px;margin-bottom:20px}
-    textarea,input{width:100%;padding:12px;margin-top:10px;background:#0f172a;border:1px solid #334155;color:white;border-radius:8px}
-    button{margin-top:12px;padding:12px;background:#7c3aed;border:none;border-radius:8px;color:white}
-    .box{background:#0f172a;border:1px solid #334155;padding:10px;border-radius:10px;margin-top:10px}
+    .sidebar{background:#020617;padding:20px}
+    .sidebar div{margin-bottom:10px;cursor:pointer}
+    .content{padding:20px}
+    .card{background:#020617;padding:20px;border-radius:12px;margin-bottom:20px}
+    textarea,input{width:100%;padding:10px;margin-top:10px;background:#0f172a;color:white;border:1px solid #334155}
+    button{margin-top:10px;padding:10px;background:#7c3aed;color:white;border:none}
+    .box{background:#1e293b;padding:10px;margin-top:10px;border-radius:8px}
   </style>
 </head>
 
 <body>
 
-<div class="topbar"><b>Diagnose Me Platform</b></div>
+<div class="topbar">Diagnose Me Platform</div>
 
 <div class="container">
 
-  <div class="sidebar">
-    <div onclick="showHome()">Dashboard</div>
-    <div onclick="showPersonal()">Clinical AI</div>
-    <div onclick="showClinical()">Clinical Assistant</div>
-    <div onclick="showDRG()">DRG Engine</div>
-    <div onclick="showCases()">Case Analytics</div>
-    <div onclick="showMetrics()">Executive View</div>
-  </div>
+<div class="sidebar">
+  <div onclick="showHome()">Home</div>
+  <div onclick="showPersonal()">Clinical AI</div>
+  <div onclick="showClinical()">Clinical Assistant</div>
+  <div onclick="showDRG()">DRG Engine</div>
+  <div onclick="showCases()">Cases</div>
+  <div onclick="showMetrics()">Metrics</div>
+</div>
 
-  <div class="content" id="app"></div>
+<div class="content" id="app"></div>
 
 </div>
 
 <script>
 
-// ================= HOME =================
+let conversation = { symptoms:"", answers:[] };
 
 function showHome(){
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>Platform Overview</h2>
-      <p>Clinical AI + Hospital Revenue Intelligence</p>
-    </div>
-  `;
+  document.getElementById("app").innerHTML = `<div class="card">Platform Ready</div>`;
 }
 
 // ================= PERSONAL =================
 
 function showPersonal(){
+  conversation = { symptoms:"", answers:[] };
+
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Clinical AI Diagnosis</h2>
       <textarea id="symptom"></textarea>
-      <button onclick="runAI()">Analyse</button>
+      <button onclick="start()">Start</button>
       <div id="out"></div>
     </div>
   `;
 }
 
-async function runAI(){
-  const input = document.getElementById("symptom").value;
+async function start(){
+  conversation.symptoms = document.getElementById("symptom").value;
+  callAI();
+}
 
-  const res = await fetch("/ai/personal-check",{
+async function callAI(){
+  const res = await fetch("/ai/personal-check", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ symptoms: input })
+    body: JSON.stringify(conversation)
   });
 
   const data = await res.json();
@@ -78,32 +76,47 @@ async function runAI(){
   document.getElementById("out").innerHTML = `
     ${(data.conditions||[]).map(c=>`
       <div class="box">
-        <b>${c.name}</b><br>
-        ${c.likelihood}<br>
-        ${c.reason}
+        ${c.name} (${c.likelihood})<br>${c.reason}
       </div>
     `).join("")}
+
+    ${(data.follow_up_questions||[]).map((q,i)=>`
+      <div class="box">
+        ${q}
+        <input id="q${i}">
+      </div>
+    `).join("")}
+
+    ${(data.follow_up_questions||[]).length ? `
+      <button onclick="submit(${data.follow_up_questions.length})">Continue</button>
+    ` : ""}
   `;
 }
 
-// ================= CLINICAL ASSISTANT =================
+function submit(n){
+  for(let i=0;i<n;i++){
+    let v=document.getElementById("q"+i).value;
+    if(v) conversation.answers.push(v);
+  }
+  callAI();
+}
+
+// ================= CLINICAL =================
 
 function showClinical(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Clinical Documentation Assistant</h2>
-      <textarea id="note" placeholder="Paste clinical notes..."></textarea>
-      <button onclick="analyseNote()">Analyse Documentation</button>
+      <textarea id="note"></textarea>
+      <button onclick="analyse()">Analyse</button>
       <div id="suggestions"></div>
     </div>
   `;
 }
 
-async function analyseNote(){
-
+async function analyse(){
   const note = document.getElementById("note").value;
 
-  const res = await fetch("/ai/clinical-assist", {
+  const res = await fetch("/ai/clinical-assist",{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
     body: JSON.stringify({ note })
@@ -112,9 +125,7 @@ async function analyseNote(){
   const data = await res.json();
 
   document.getElementById("suggestions").innerHTML =
-    (data.suggestions||[]).map(s=>`
-      <div class="box">${s}</div>
-    `).join("");
+    (data.suggestions||[]).map(s=>`<div class="box">${s}</div>`).join("");
 }
 
 // ================= DRG =================
@@ -122,36 +133,33 @@ async function analyseNote(){
 function showDRG(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>DRG Engine</h2>
       <input id="dx">
-      <button onclick="runDRG()">Estimate</button>
-      <div id="drgOut"></div>
+      <button onclick="runDRG()">Run</button>
+      <div id="out"></div>
     </div>
   `;
 }
 
 async function runDRG(){
-  const dx = document.getElementById("dx").value;
+  const dx=document.getElementById("dx").value;
 
-  const res = await fetch("/drg/estimate",{
+  const res=await fetch("/drg/estimate",{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
     body: JSON.stringify({ diagnosis: dx })
   });
 
-  const data = await res.json();
+  const data=await res.json();
 
-  document.getElementById("drgOut").innerHTML = `
-    <div class="box">
-      Predicted: $${data.funding}
-      <input id="actual">
-      <button onclick="saveCase(${data.funding})">Save</button>
-    </div>
+  document.getElementById("out").innerHTML=`
+    ${data.funding}
+    <input id="actual">
+    <button onclick="save(${data.funding})">Save</button>
   `;
 }
 
-async function saveCase(predicted){
-  const actual = Number(document.getElementById("actual").value||0);
+async function save(predicted){
+  const actual=Number(document.getElementById("actual").value||0);
 
   await fetch("/pilot/track",{
     method:"POST",
@@ -165,38 +173,25 @@ async function saveCase(predicted){
 // ================= CASES =================
 
 async function showCases(){
-  const res = await fetch("/pilot/data");
-  const data = await res.json();
+  const res=await fetch("/pilot/data");
+  const data=await res.json();
 
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>Case Analytics</h2>
-      ${data.map(r=>`
-        <div class="box">
-          $${r.predicted} vs $${r.actual} → ${r.actual - r.predicted}
-        </div>
-      `).join("")}
-    </div>
-  `;
+  document.getElementById("app").innerHTML =
+    data.map(r=>`<div class="box">${r.predicted} vs ${r.actual}</div>`).join("");
 }
 
 // ================= METRICS =================
 
 async function showMetrics(){
-  const res = await fetch("/pilot/metrics");
-  const d = await res.json();
+  const res=await fetch("/pilot/metrics");
+  const d=await res.json();
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Executive View</h2>
-      Predicted: $${d.predicted}<br>
-      Actual: $${d.actual}<br>
-      Variance: $${d.delta}
+      ${d.predicted} / ${d.actual} / ${d.delta}
     </div>
   `;
 }
-
-// ================= INIT =================
 
 showHome();
 
@@ -204,4 +199,3 @@ showHome();
 
 </body>
 </html>
-🧠 What this restores
