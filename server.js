@@ -15,22 +15,20 @@ app.use(express.json());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ================= PERSONAL AI (RESTORED PROPERLY) =================
+// ================= PERSONAL AI (FIXED) =================
 
 app.post("/ai/personal-check", async (req, res) => {
   try {
-    const { symptoms } = req.body;
+    const { symptoms, answers } = req.body;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -38,30 +36,36 @@ app.post("/ai/personal-check", async (req, res) => {
         {
           role: "system",
           content: `
-You are a cautious clinical assistant.
+You are a clinical triage assistant.
 
-Return ONLY JSON:
+Return ONLY VALID JSON in this exact format:
 
 {
   "conditions": [
     {
-      "name": "",
+      "name": "Condition name",
       "likelihood": "low | moderate | high",
-      "reason": ""
+      "reason": "Why this fits"
     }
   ],
-  "overall_assessment": "",
-  "follow_up_questions": [],
+  "overall_assessment": "Summary of situation",
+  "follow_up_questions": ["Question 1", "Question 2"],
   "urgency": "LOW | MEDIUM | HIGH"
 }
 
-Do NOT diagnose definitively.
-Be clear and clinically realistic.
-          `
+Rules:
+- Do NOT include markdown
+- Do NOT include explanations outside JSON
+- Always include at least 2 conditions
+- Always include at least 2 follow-up questions unless fully resolved
+`
         },
         {
           role: "user",
-          content: symptoms
+          content: `
+Symptoms: ${symptoms}
+Answers so far: ${answers || ""}
+`
         }
       ],
       temperature: 0.4
@@ -70,18 +74,26 @@ Be clear and clinically realistic.
     let text = completion.choices[0].message.content;
 
     try {
-      res.json(JSON.parse(text));
+      const parsed = JSON.parse(text);
+      res.json(parsed);
     } catch {
+      // fallback (still structured)
       res.json({
-        conditions: [],
+        conditions: [
+          {
+            name: "Unclear diagnosis",
+            likelihood: "moderate",
+            reason: text
+          }
+        ],
         overall_assessment: text,
-        follow_up_questions: [],
+        follow_up_questions: ["Can you describe symptoms in more detail?"],
         urgency: "LOW"
       });
     }
 
   } catch (err) {
-    console.error(err);
+    console.error("AI ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -91,7 +103,7 @@ Be clear and clinically realistic.
 app.post("/drg/estimate", (req, res) => {
   const { diagnosis } = req.body;
 
-  let weight = diagnosis?.includes("depression") ? 1.8 : 1.2;
+  let weight = diagnosis?.toLowerCase().includes("depression") ? 1.8 : 1.2;
   let funding = Math.round(weight * 7000);
 
   res.json({ funding });
@@ -137,6 +149,8 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
+// ================= START =================
 
 const PORT = process.env.PORT || 10000;
 
