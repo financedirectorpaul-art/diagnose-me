@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -22,9 +23,12 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// ================= IN-MEMORY STORE =================
+// ================= SUPABASE =================
 
-let pilotData = [];
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 // ================= PERSONAL AI =================
 
@@ -69,7 +73,6 @@ Return ONLY JSON:
     }
 
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -85,7 +88,7 @@ app.post("/ai/clinical-assist", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "Identify documentation gaps that could impact clinical coding and funding."
+          content: "Identify documentation gaps impacting clinical coding and funding."
         },
         {
           role: "user",
@@ -125,23 +128,46 @@ app.post("/drg/estimate", (req, res) => {
 
 // ================= PILOT TRACK =================
 
-app.post("/pilot/track", (req, res) => {
-  pilotData.push(req.body);
-  res.json({ success: true });
+app.post("/pilot/track", async (req, res) => {
+  try {
+    const { predicted, actual } = req.body;
+
+    const { error } = await supabase
+      .from("pilot_data")
+      .insert([{ predicted, actual }]);
+
+    if (error) throw error;
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ================= METRICS =================
 
-app.get("/pilot/metrics", (req, res) => {
-  const predicted = pilotData.reduce((a,b)=>a+(b.predicted||0),0);
-  const actual = pilotData.reduce((a,b)=>a+(b.actual||0),0);
+app.get("/pilot/metrics", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("pilot_data")
+      .select("*");
 
-  res.json({
-    predicted,
-    actual,
-    delta: actual - predicted,
-    total: pilotData.length
-  });
+    if (error) throw error;
+
+    const predicted = data.reduce((a,b)=>a+(b.predicted||0),0);
+    const actual = data.reduce((a,b)=>a+(b.actual||0),0);
+
+    res.json({
+      predicted,
+      actual,
+      delta: actual - predicted,
+      total: data.length
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ================= FRONTEND =================
