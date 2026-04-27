@@ -14,8 +14,9 @@
     .card{background:#fff;color:#111;padding:20px;border-radius:12px;margin-bottom:20px}
     textarea,input{width:100%;margin-top:10px;padding:10px}
     button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
-    .suggestion{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
     .metric{background:#111;color:#fff;padding:10px;margin-top:10px;border-radius:10px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:8px;border-bottom:1px solid #ccc;text-align:left}
   </style>
 </head>
 
@@ -67,7 +68,7 @@ function showHome(){
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Hospital Revenue Platform</h2>
-      <p>Track predicted vs actual funding and identify variance.</p>
+      <p>Track predicted vs actual funding and identify variance leakage.</p>
     </div>
   `;
 }
@@ -97,7 +98,7 @@ async function runAI(){
   const data = await res.json();
 
   document.getElementById("out").innerHTML = `
-    <div class="suggestion">${data.reasoning || data.output}</div>
+    <div>${data.reasoning || data.output}</div>
   `;
 }
 
@@ -151,7 +152,6 @@ async function saveCase(predicted){
   });
 
   alert("Case saved");
-
 }
 
 // ================= METRICS =================
@@ -177,17 +177,37 @@ async function showMetrics(){
   `;
 }
 
-// ================= CASE VIEW =================
+// ================= CASE TABLE =================
 
 async function showCases(){
 
-  const res = await fetch("/pilot/metrics");
+  const res = await fetch("/pilot/data"); // NEW endpoint needed
   const data = await res.json();
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Case Tracking</h2>
-      <p>Use Supabase table for detailed case-level review.</p>
+      <h2>Case-Level Tracking</h2>
+
+      <table>
+        <tr>
+          <th>ID</th>
+          <th>Predicted</th>
+          <th>Actual</th>
+          <th>Variance</th>
+          <th>Date</th>
+        </tr>
+
+        ${data.map(row => `
+          <tr>
+            <td>${row.id}</td>
+            <td>$${row.predicted}</td>
+            <td>$${row.actual}</td>
+            <td>$${row.actual - row.predicted}</td>
+            <td>${new Date(row.created_at).toLocaleString()}</td>
+          </tr>
+        `).join("")}
+
+      </table>
     </div>
   `;
 }
@@ -200,4 +220,3 @@ showHome();
 
 </body>
 </html>
-🧠 What you now have
