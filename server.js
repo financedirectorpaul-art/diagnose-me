@@ -57,7 +57,6 @@ Return ONLY JSON:
 
     let text = completion.choices[0].message.content;
 
-    // Safe parse fallback
     try {
       res.json(JSON.parse(text));
     } catch {
@@ -70,11 +69,12 @@ Return ONLY JSON:
     }
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================= CLINICAL ASSISTANT =================
+// ================= CLINICAL AI =================
 
 app.post("/ai/clinical-assist", async (req, res) => {
   try {
