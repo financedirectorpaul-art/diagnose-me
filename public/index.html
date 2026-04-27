@@ -16,9 +16,6 @@
     button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
     .suggestion{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
     .metric{background:#111;color:#fff;padding:10px;margin-top:10px;border-radius:10px}
-    .pill{padding:5px 10px;border-radius:10px;color:#fff}
-    .HIGH{background:#dc2626}.MEDIUM{background:#d97706}.LOW{background:#16a34a}
-    .error{color:red;margin-top:10px}
   </style>
 </head>
 
@@ -33,13 +30,11 @@
 
   <div class="sidebar">
     <div onclick="togglePilot()">Pilot Mode</div>
-
     <div onclick="showHome()">Home</div>
     <div onclick="showPersonal()">Personal Health Check</div>
-    <div onclick="showClinical()">Clinical Assistant</div>
     <div onclick="showDRG()">DRG Engine</div>
     <div onclick="showMetrics()">Pilot Metrics</div>
-    <div onclick="showExecutive()">Executive Dashboard</div>
+    <div onclick="showCases()">Case Tracking</div>
   </div>
 
   <div class="content" id="app"></div>
@@ -51,8 +46,6 @@
 // ================= STATE =================
 
 let pilot = localStorage.getItem("pilot") === "true";
-let conversation = { symptoms:"", answers:[] };
-
 updatePilot();
 
 // ================= PILOT =================
@@ -73,13 +66,8 @@ function updatePilot(){
 function showHome(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Platform Overview</h2>
-      <p>This system combines:</p>
-      <ul>
-        <li>AI Personal Health Assessment</li>
-        <li>Clinical Documentation Intelligence</li>
-        <li>Hospital Funding Optimisation</li>
-      </ul>
+      <h2>Hospital Revenue Platform</h2>
+      <p>Track predicted vs actual funding and identify variance.</p>
     </div>
   `;
 }
@@ -91,58 +79,26 @@ function showPersonal(){
     <div class="card">
       <h2>Personal Health Check</h2>
       <textarea id="symptom"></textarea>
-      <button onclick="startAssessment()">Start Assessment</button>
+      <button onclick="runAI()">Analyse</button>
       <div id="out"></div>
     </div>
   `;
 }
 
-async function startAssessment(){
+async function runAI(){
   const input = document.getElementById("symptom").value;
-
-  conversation = { symptoms: input, answers: [] };
 
   const res = await fetch("/ai/personal-check", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(conversation)
+    body: JSON.stringify({ symptoms: input })
   });
 
   const data = await res.json();
 
   document.getElementById("out").innerHTML = `
-    <div class="suggestion"><b>Causes:</b><br>${(data.causes||[]).join("<br>")}</div>
-    <div class="suggestion"><b>Reasoning:</b><br>${data.reasoning||data.output||""}</div>
-    <div class="suggestion"><b>Urgency:</b> ${data.urgency||"LOW"}</div>
+    <div class="suggestion">${data.reasoning || data.output}</div>
   `;
-}
-
-// ================= CLINICAL =================
-
-function showClinical(){
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      <h2>Clinical Documentation Assistant</h2>
-      <textarea id="note"></textarea>
-      <button onclick="runClinical()">Analyse</button>
-      <div id="suggestions"></div>
-    </div>
-  `;
-}
-
-async function runClinical(){
-  const note = document.getElementById("note").value;
-
-  const res = await fetch("/ai/clinical-assist", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ note })
-  });
-
-  const data = await res.json();
-
-  document.getElementById("suggestions").innerHTML =
-    (data.suggestions||[]).map(s=>`<div class="suggestion">${s}</div>`).join("");
 }
 
 // ================= DRG =================
@@ -152,13 +108,14 @@ function showDRG(){
     <div class="card">
       <h2>DRG Engine</h2>
       <input id="dx" placeholder="Diagnosis">
-      <button onclick="runDRG()">Estimate</button>
+      <button onclick="estimateDRG()">Estimate</button>
       <div id="drgOut"></div>
     </div>
   `;
 }
 
-async function runDRG(){
+async function estimateDRG(){
+
   const diagnosis = document.getElementById("dx").value;
 
   const res = await fetch("/drg/estimate", {
@@ -170,51 +127,67 @@ async function runDRG(){
   const data = await res.json();
 
   document.getElementById("drgOut").innerHTML = `
-    <div class="metric">DRG: ${data.drg}</div>
-    <div class="metric">Weight: ${data.weight}</div>
-    <div class="metric">Funding: $${data.funding}</div>
-  `;
+    <div class="metric">Predicted Funding: $${data.funding}</div>
 
-  // Track
-  if(pilot){
-    await fetch("/pilot/track", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ predicted:data.funding, actual:0 })
-    });
-  }
+    <input id="actual" placeholder="Enter actual funding">
+
+    <button onclick="saveCase(${data.funding})">Save Case</button>
+  `;
+}
+
+// ================= SAVE CASE =================
+
+async function saveCase(predicted){
+
+  const actual = Number(document.getElementById("actual").value || 0);
+
+  await fetch("/pilot/track", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      predicted,
+      actual
+    })
+  });
+
+  alert("Case saved");
+
 }
 
 // ================= METRICS =================
 
 async function showMetrics(){
+
   const res = await fetch("/pilot/metrics");
   const data = await res.json();
+
+  const avgVariance = data.total
+    ? Math.round(data.delta / data.total)
+    : 0;
 
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Pilot Metrics</h2>
       <div class="metric">Predicted: $${data.predicted}</div>
       <div class="metric">Actual: $${data.actual}</div>
-      <div class="metric">Delta: $${data.delta}</div>
-      <div class="metric">Episodes: ${data.total}</div>
+      <div class="metric">Total Variance: $${data.delta}</div>
+      <div class="metric">Avg Variance per Case: $${avgVariance}</div>
+      <div class="metric">Cases: ${data.total}</div>
     </div>
   `;
 }
 
-// ================= EXEC =================
+// ================= CASE VIEW =================
 
-async function showExecutive(){
+async function showCases(){
+
   const res = await fetch("/pilot/metrics");
   const data = await res.json();
 
-  const roi = data.predicted ? Math.round((data.delta/data.predicted)*100) : 0;
-
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Executive Dashboard</h2>
-      <div class="metric">Revenue Impact: $${data.delta}</div>
-      <div class="metric">ROI: ${roi}%</div>
+      <h2>Case Tracking</h2>
+      <p>Use Supabase table for detailed case-level review.</p>
     </div>
   `;
 }
@@ -227,3 +200,4 @@ showHome();
 
 </body>
 </html>
+🧠 What you now have
