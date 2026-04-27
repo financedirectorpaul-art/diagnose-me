@@ -6,7 +6,7 @@
 
   <style>
     body{font-family:Arial;background:#0b0720;color:#fff;margin:0}
-    .topbar{padding:15px;background:#120d2f;display:flex;justify-content:space-between}
+    .topbar{padding:15px;background:#120d2f}
     .container{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 60px)}
     .sidebar{background:#120d2f;padding:15px}
     .sidebar div{margin-bottom:10px;cursor:pointer}
@@ -14,8 +14,7 @@
     .card{background:#fff;color:#111;padding:20px;border-radius:12px;margin-bottom:20px}
     textarea,input{width:100%;margin-top:10px;padding:10px}
     button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
-    .condition{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
-    .metric{background:#111;color:#fff;padding:10px;margin-top:10px;border-radius:10px}
+    .box{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
     table{width:100%;border-collapse:collapse;margin-top:10px}
     th,td{padding:8px;border-bottom:1px solid #ccc}
   </style>
@@ -23,9 +22,7 @@
 
 <body>
 
-<div class="topbar">
-  <div><b>Diagnose Me Platform</b></div>
-</div>
+<div class="topbar"><b>Diagnose Me Platform</b></div>
 
 <div class="container">
 
@@ -34,6 +31,7 @@
     <div onclick="showPersonal()">Personal Health Check</div>
     <div onclick="showDRG()">DRG Engine</div>
     <div onclick="showCases()">Case Tracking</div>
+    <div onclick="showMetrics()">Metrics</div>
   </div>
 
   <div class="content" id="app"></div>
@@ -42,13 +40,18 @@
 
 <script>
 
+// ================= STATE =================
+
+let conversation = { symptoms:"", answers:[] };
+let caseData = [];
+
 // ================= HOME =================
 
 function showHome(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Welcome</h2>
-      <p>Use the Personal Health Check or DRG tools.</p>
+      <h2>Full Platform</h2>
+      <p>Clinical AI + Hospital Revenue Intelligence</p>
     </div>
   `;
 }
@@ -56,50 +59,73 @@ function showHome(){
 // ================= PERSONAL =================
 
 function showPersonal(){
+  conversation = { symptoms:"", answers:[] };
+
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Personal Health Check</h2>
-      <textarea id="symptom" placeholder="Describe symptoms"></textarea>
-      <button onclick="runDiagnosis()">Analyse</button>
+      <textarea id="symptom"></textarea>
+      <button onclick="startAssessment()">Start</button>
       <div id="result"></div>
     </div>
   `;
 }
 
-async function runDiagnosis(){
+async function startAssessment(){
+  conversation.symptoms = document.getElementById("symptom").value;
+  callAI();
+}
 
-  const symptoms = document.getElementById("symptom").value;
+async function callAI(){
+
+  document.getElementById("result").innerHTML = "Thinking...";
 
   const res = await fetch("/ai/personal-check", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ symptoms })
+    body: JSON.stringify(conversation)
   });
 
   const data = await res.json();
 
   document.getElementById("result").innerHTML = `
-    <h3>Possible Conditions</h3>
+    <h3>Conditions</h3>
 
-    ${(data.conditions || []).map(c => `
-      <div class="condition">
+    ${(data.conditions||[]).map(c=>`
+      <div class="box">
         <b>${c.name}</b><br>
-        Likelihood: ${c.likelihood}<br>
+        ${c.likelihood}<br>
         ${c.reason}
       </div>
     `).join("")}
 
-    <h3>Overall Assessment</h3>
-    <div class="condition">${data.overall_assessment}</div>
+    <h3>Assessment</h3>
+    <div class="box">${data.overall_assessment}</div>
 
-    <h3>Follow-up Questions</h3>
-    <div class="condition">
-      ${(data.follow_up_questions || []).join("<br>")}
-    </div>
+    <h3>Follow-up</h3>
+
+    ${(data.follow_up_questions||[]).map((q,i)=>`
+      <div class="box">
+        ${q}
+        <input id="q${i}">
+      </div>
+    `).join("")}
+
+    ${(data.follow_up_questions||[]).length ? `
+      <button onclick="submitAnswers(${data.follow_up_questions.length})">Continue</button>
+    ` : ""}
 
     <h3>Urgency</h3>
-    <div class="condition">${data.urgency}</div>
+    <div class="box">${data.urgency}</div>
   `;
+}
+
+function submitAnswers(n){
+  for(let i=0;i<n;i++){
+    let v = document.getElementById("q"+i).value;
+    if(v) conversation.answers.push(v);
+  }
+  callAI();
 }
 
 // ================= DRG =================
@@ -108,7 +134,7 @@ function showDRG(){
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>DRG Engine</h2>
-      <input id="dx" placeholder="Diagnosis">
+      <input id="dx">
       <button onclick="runDRG()">Estimate</button>
       <div id="drgOut"></div>
     </div>
@@ -128,8 +154,23 @@ async function runDRG(){
   const data = await res.json();
 
   document.getElementById("drgOut").innerHTML = `
-    <div class="metric">Predicted: $${data.funding}</div>
+    Predicted: $${data.funding}<br>
+    <input id="actual" placeholder="Actual funding">
+    <button onclick="saveCase(${data.funding})">Save Case</button>
   `;
+}
+
+async function saveCase(predicted){
+
+  let actual = Number(document.getElementById("actual").value || 0);
+
+  await fetch("/pilot/track", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ predicted, actual })
+  });
+
+  alert("Saved");
 }
 
 // ================= CASES =================
@@ -137,11 +178,38 @@ async function runDRG(){
 async function showCases(){
 
   const res = await fetch("/pilot/data");
+  caseData = await res.json();
+
+  renderTable(caseData);
+}
+
+// ================= METRICS =================
+
+async function showMetrics(){
+
+  const res = await fetch("/pilot/metrics");
   const data = await res.json();
 
   document.getElementById("app").innerHTML = `
     <div class="card">
+      <h2>Metrics</h2>
+      Predicted: $${data.predicted}<br>
+      Actual: $${data.actual}<br>
+      Variance: $${data.delta}<br>
+      Cases: ${data.total}
+    </div>
+  `;
+}
+
+// ================= TABLE =================
+
+function renderTable(data){
+
+  document.getElementById("app").innerHTML = `
+    <div class="card">
       <h2>Case Tracking</h2>
+
+      <button onclick="exportCSV()">Export CSV</button>
 
       <table>
         <tr>
@@ -149,19 +217,49 @@ async function showCases(){
           <th>Predicted</th>
           <th>Actual</th>
           <th>Variance</th>
+          <th>Date</th>
         </tr>
 
-        ${data.map(r => `
+        ${data.map(r=>`
           <tr>
             <td>${r.id}</td>
             <td>$${r.predicted}</td>
             <td>$${r.actual}</td>
             <td>$${r.actual - r.predicted}</td>
+            <td>${new Date(r.created_at).toLocaleString()}</td>
           </tr>
         `).join("")}
+
       </table>
     </div>
   `;
+}
+
+// ================= CSV =================
+
+function exportCSV(){
+
+  let rows = [["ID","Predicted","Actual","Variance","Date"]];
+
+  caseData.forEach(r=>{
+    rows.push([
+      r.id,
+      r.predicted,
+      r.actual,
+      r.actual - r.predicted,
+      r.created_at
+    ]);
+  });
+
+  let csv = rows.map(r=>r.join(",")).join("\n");
+
+  let blob = new Blob([csv]);
+  let url = URL.createObjectURL(blob);
+
+  let a = document.createElement("a");
+  a.href = url;
+  a.download = "cases.csv";
+  a.click();
 }
 
 // ================= INIT =================
