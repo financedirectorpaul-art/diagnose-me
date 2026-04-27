@@ -12,29 +12,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ================= PATH =================
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ================= OPENAI =================
-
+// OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// ================= SUPABASE =================
-
+// Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ================= PERSONAL AI =================
+// ================= PERSONAL AI (RESTORED PROPERLY) =================
 
 app.post("/ai/personal-check", async (req, res) => {
   try {
-    const { symptoms, answers } = req.body;
+    const { symptoms } = req.body;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -42,21 +38,33 @@ app.post("/ai/personal-check", async (req, res) => {
         {
           role: "system",
           content: `
+You are a cautious clinical assistant.
+
 Return ONLY JSON:
+
 {
-  "causes": [],
-  "reasoning": "",
-  "questions": [],
+  "conditions": [
+    {
+      "name": "",
+      "likelihood": "low | moderate | high",
+      "reason": ""
+    }
+  ],
+  "overall_assessment": "",
+  "follow_up_questions": [],
   "urgency": "LOW | MEDIUM | HIGH"
 }
+
+Do NOT diagnose definitively.
+Be clear and clinically realistic.
           `
         },
         {
           role: "user",
-          content: `Symptoms: ${symptoms}\nAnswers: ${answers || ""}`
+          content: symptoms
         }
       ],
-      temperature: 0.3
+      temperature: 0.4
     });
 
     let text = completion.choices[0].message.content;
@@ -64,140 +72,62 @@ Return ONLY JSON:
     try {
       res.json(JSON.parse(text));
     } catch {
-      // fallback if AI returns bad JSON
       res.json({
-        causes: ["Unable to determine"],
-        reasoning: text,
-        questions: [],
+        conditions: [],
+        overall_assessment: text,
+        follow_up_questions: [],
         urgency: "LOW"
       });
     }
 
   } catch (err) {
-    console.error("Personal AI error:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================= CLINICAL AI =================
-
-app.post("/ai/clinical-assist", async (req, res) => {
-  try {
-    const { note } = req.body;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "system",
-          content: "Identify documentation gaps that could impact clinical coding and funding."
-        },
-        {
-          role: "user",
-          content: note
-        }
-      ]
-    });
-
-    res.json({
-      suggestions: completion.choices[0].message.content
-        .split("\n")
-        .filter(x => x.trim() !== "")
-    });
-
-  } catch (err) {
-    console.error("Clinical AI error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ================= DRG ENGINE =================
+// ================= DRG =================
 
 app.post("/drg/estimate", (req, res) => {
-  try {
-    const { diagnosis } = req.body;
+  const { diagnosis } = req.body;
 
-    let drg = "E62B";
-    let weight = 1.2;
+  let weight = diagnosis?.includes("depression") ? 1.8 : 1.2;
+  let funding = Math.round(weight * 7000);
 
-    if (diagnosis?.toLowerCase().includes("depression")) {
-      drg = "U60A";
-      weight = 1.8;
-    }
-
-    const funding = Math.round(weight * 7000);
-
-    res.json({ drg, weight, funding });
-
-  } catch (err) {
-    console.error("DRG error:", err);
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ funding });
 });
 
-// ================= PILOT TRACK =================
+// ================= PILOT =================
 
 app.post("/pilot/track", async (req, res) => {
-  try {
-    const { predicted, actual } = req.body;
+  const { predicted, actual } = req.body;
 
-    const { error } = await supabase
-      .from("pilot_data")
-      .insert([{ predicted, actual }]);
+  await supabase.from("pilot_data").insert([{ predicted, actual }]);
 
-    if (error) throw error;
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("Pilot track error:", err);
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ success: true });
 });
-
-// ================= METRICS =================
 
 app.get("/pilot/metrics", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("pilot_data")
-      .select("*");
+  const { data } = await supabase.from("pilot_data").select("*");
 
-    if (error) throw error;
+  const predicted = data.reduce((a,b)=>a+b.predicted,0);
+  const actual = data.reduce((a,b)=>a+b.actual,0);
 
-    const predicted = data.reduce((a,b)=>a+(b.predicted||0),0);
-    const actual = data.reduce((a,b)=>a+(b.actual||0),0);
-
-    res.json({
-      predicted,
-      actual,
-      delta: actual - predicted,
-      total: data.length
-    });
-
-  } catch (err) {
-    console.error("Metrics error:", err);
-    res.status(500).json({ error: err.message });
-  }
+  res.json({
+    predicted,
+    actual,
+    delta: actual - predicted,
+    total: data.length
+  });
 });
 
-// ================= CASE DATA =================
-
 app.get("/pilot/data", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("pilot_data")
-      .select("*")
-      .order("created_at", { ascending: false });
+  const { data } = await supabase
+    .from("pilot_data")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-    if (error) throw error;
-
-    res.json(data);
-
-  } catch (err) {
-    console.error("Case data error:", err);
-    res.status(500).json({ error: err.message });
-  }
+  res.json(data);
 });
 
 // ================= FRONTEND =================
@@ -207,8 +137,6 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
-
-// ================= START =================
 
 const PORT = process.env.PORT || 10000;
 
