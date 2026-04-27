@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Diagnose Me</title>
+  <title>Diagnose Me Platform</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
@@ -16,13 +16,16 @@
     button{margin-top:10px;padding:10px;background:#6d28d9;color:#fff;border:none}
     .suggestion{background:#f3f0ff;padding:10px;margin-top:10px;border-radius:10px}
     .metric{background:#111;color:#fff;padding:10px;margin-top:10px;border-radius:10px}
+    .pill{padding:5px 10px;border-radius:10px;color:#fff}
+    .HIGH{background:#dc2626}.MEDIUM{background:#d97706}.LOW{background:#16a34a}
+    .error{color:red;margin-top:10px}
   </style>
 </head>
 
 <body>
 
 <div class="topbar">
-  <div><b>Diagnose Me</b></div>
+  <div><b>Diagnose Me Platform</b></div>
   <div id="pilotStatus"></div>
 </div>
 
@@ -33,10 +36,8 @@
 
     <div onclick="showHome()">Home</div>
     <div onclick="showPersonal()">Personal Health Check</div>
-
     <div onclick="showClinical()">Clinical Assistant</div>
     <div onclick="showDRG()">DRG Engine</div>
-    <div onclick="showTracking()">Actual vs Predicted</div>
     <div onclick="showMetrics()">Pilot Metrics</div>
     <div onclick="showExecutive()">Executive Dashboard</div>
   </div>
@@ -50,7 +51,7 @@
 // ================= STATE =================
 
 let pilot = localStorage.getItem("pilot") === "true";
-let drgData = JSON.parse(localStorage.getItem("drgData") || "[]");
+let conversation = { symptoms:"", answers:[] };
 
 updatePilot();
 
@@ -72,25 +73,18 @@ function updatePilot(){
 function showHome(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Welcome</h2>
-      <p>This platform includes both:</p>
+      <h2>Platform Overview</h2>
+      <p>This system combines:</p>
       <ul>
-        <li>Personal AI Health Check</li>
-        <li>Hospital Revenue & Clinical Tools</li>
+        <li>AI Personal Health Assessment</li>
+        <li>Clinical Documentation Intelligence</li>
+        <li>Hospital Funding Optimisation</li>
       </ul>
-    </div>
-
-    <div class="card">
-      <h3>Quick Actions</h3>
-      <button onclick="showPersonal()">Start Health Check</button>
-      <button onclick="showClinical()">Open Clinical Assistant</button>
     </div>
   `;
 }
 
 // ================= PERSONAL =================
-
-let conversation = { symptoms:"", answers:[] };
 
 function showPersonal(){
   document.getElementById("app").innerHTML = `
@@ -105,9 +99,10 @@ function showPersonal(){
 
 async function startAssessment(){
   const input = document.getElementById("symptom").value;
+
   conversation = { symptoms: input, answers: [] };
 
-  const res = await fetch(window.location.origin + "/ai/personal-check",{
+  const res = await fetch("/ai/personal-check", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
     body: JSON.stringify(conversation)
@@ -116,7 +111,9 @@ async function startAssessment(){
   const data = await res.json();
 
   document.getElementById("out").innerHTML = `
-    <div class="suggestion">${data.reasoning || data.output || "Response received"}</div>
+    <div class="suggestion"><b>Causes:</b><br>${(data.causes||[]).join("<br>")}</div>
+    <div class="suggestion"><b>Reasoning:</b><br>${data.reasoning||data.output||""}</div>
+    <div class="suggestion"><b>Urgency:</b> ${data.urgency||"LOW"}</div>
   `;
 }
 
@@ -125,18 +122,27 @@ async function startAssessment(){
 function showClinical(){
   document.getElementById("app").innerHTML = `
     <div class="card">
-      <h2>Clinical Assistant</h2>
-      <textarea oninput="assist(this.value)"></textarea>
+      <h2>Clinical Documentation Assistant</h2>
+      <textarea id="note"></textarea>
+      <button onclick="runClinical()">Analyse</button>
       <div id="suggestions"></div>
     </div>
   `;
 }
 
-function assist(t){
-  let s=[];
-  if(t.includes("pneumonia")) s.push("Consider sepsis");
+async function runClinical(){
+  const note = document.getElementById("note").value;
+
+  const res = await fetch("/ai/clinical-assist", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ note })
+  });
+
+  const data = await res.json();
+
   document.getElementById("suggestions").innerHTML =
-    s.map(x=>`<div class="suggestion">${x}</div>`).join("");
+    (data.suggestions||[]).map(s=>`<div class="suggestion">${s}</div>`).join("");
 }
 
 // ================= DRG =================
@@ -145,51 +151,70 @@ function showDRG(){
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>DRG Engine</h2>
-      <button onclick="runDRG()">Run</button>
+      <input id="dx" placeholder="Diagnosis">
+      <button onclick="runDRG()">Estimate</button>
+      <div id="drgOut"></div>
     </div>
   `;
 }
 
-function runDRG(){
-  drgData.push({predicted:10000, actual:0});
-  localStorage.setItem("drgData", JSON.stringify(drgData));
-  showTracking();
-}
+async function runDRG(){
+  const diagnosis = document.getElementById("dx").value;
 
-// ================= TRACKING =================
+  const res = await fetch("/drg/estimate", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ diagnosis })
+  });
 
-function showTracking(){
-  document.getElementById("app").innerHTML = `
-    <div class="card">
-      ${drgData.map(r=>`Predicted: ${r.predicted} Actual: ${r.actual}<br>`).join("")}
-    </div>
+  const data = await res.json();
+
+  document.getElementById("drgOut").innerHTML = `
+    <div class="metric">DRG: ${data.drg}</div>
+    <div class="metric">Weight: ${data.weight}</div>
+    <div class="metric">Funding: $${data.funding}</div>
   `;
+
+  // Track
+  if(pilot){
+    await fetch("/pilot/track", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ predicted:data.funding, actual:0 })
+    });
+  }
 }
 
 // ================= METRICS =================
 
-function showMetrics(){
-  let p = drgData.reduce((a,b)=>a+b.predicted,0);
-  let a = drgData.reduce((a,b)=>a+b.actual,0);
+async function showMetrics(){
+  const res = await fetch("/pilot/metrics");
+  const data = await res.json();
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      Predicted: ${p}<br>
-      Actual: ${a}<br>
-      Delta: ${a-p}
+      <h2>Pilot Metrics</h2>
+      <div class="metric">Predicted: $${data.predicted}</div>
+      <div class="metric">Actual: $${data.actual}</div>
+      <div class="metric">Delta: $${data.delta}</div>
+      <div class="metric">Episodes: ${data.total}</div>
     </div>
   `;
 }
 
 // ================= EXEC =================
 
-function showExecutive(){
-  let p = drgData.reduce((a,b)=>a+b.predicted,0);
-  let a = drgData.reduce((a,b)=>a+b.actual,0);
+async function showExecutive(){
+  const res = await fetch("/pilot/metrics");
+  const data = await res.json();
+
+  const roi = data.predicted ? Math.round((data.delta/data.predicted)*100) : 0;
 
   document.getElementById("app").innerHTML = `
     <div class="card">
-      Revenue Impact: ${a-p}
+      <h2>Executive Dashboard</h2>
+      <div class="metric">Revenue Impact: $${data.delta}</div>
+      <div class="metric">ROI: ${roi}%</div>
     </div>
   `;
 }
