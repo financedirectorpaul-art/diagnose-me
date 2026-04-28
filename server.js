@@ -1,16 +1,22 @@
-// server.js - DOCTORPD Ultimate Backend (Full Expanded Version)
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
-const Database = require('better-sqlite3');
-const { Deepgram } = require('@deepgram/sdk');
+// server.js - DOCTORPD Ultimate Backend (Full ES Module Version)
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import multer from 'multer';
+import cors from 'cors';
+import path from 'path';
+import Database from 'better-sqlite3';
+import { Deepgram } from '@deepgram/sdk';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const server = http.createServer(app);
+const server = createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(cors());
@@ -20,7 +26,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const upload = multer({ storage: multer.memoryStorage() });
 const db = new Database('doctorpd.db');
 
-// Tables
+// Create tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS cases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,7 +83,7 @@ app.post('/auth/login', (req, res) => {
   }
 });
 
-// ====================== GDPR ARTICLE 30 ENDPOINTS ======================
+// ====================== GDPR ARTICLE 30 ======================
 app.get('/gdpr/processing-activities', (req, res) => {
   const email = req.query.email;
   const logs = db.prepare('SELECT * FROM audit_logs WHERE clinician_email = ? ORDER BY timestamp DESC').all(email);
@@ -194,8 +200,6 @@ io.on('connection', (socket) => {
     if (dgConnection) dgConnection.finish();
     socket.emit('transcriptionFinal', "Patient reports sharp pain in the right knee after a fall yesterday. Swelling noted, no instability. Pain rated 7/10 on VAS scale.");
   });
-
-  socket.on('disconnect', () => {});
 });
 
 // ====================== HEALTH CHECK ======================
