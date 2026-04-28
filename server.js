@@ -1,22 +1,16 @@
-// server.js - DOCTORPD Ultimate Backend (Full ES Module Version)
-import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import multer from 'multer';
-import cors from 'cors';
-import path from 'path';
-import Database from 'better-sqlite3';
-import { Deepgram } from '@deepgram/sdk';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// server.js - DOCTORPD Ultimate Backend (Full CommonJS Version - Render Compatible)
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const multer = require('multer');
+const cors = require('cors');
+const path = require('path');
+const Database = require('better-sqlite3');
+const { Deepgram } = require('@deepgram/sdk');
 
 const app = express();
-const server = createServer(app);
+const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(cors());
