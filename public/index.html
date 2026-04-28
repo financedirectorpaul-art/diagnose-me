@@ -9,7 +9,7 @@ body{font-family:Arial;background:#0f172a;margin:0;color:#e5e7eb}
 .container{display:grid;grid-template-columns:260px 1fr;height:100vh}
 .sidebar{background:#020617;padding:20px}
 .sidebar div{margin-bottom:10px;cursor:pointer}
-.chat{padding:20px;height:60vh;overflow:auto}
+.chat{padding:20px;height:55vh;overflow:auto}
 .bubble{padding:10px;margin:10px;border-radius:10px;max-width:70%}
 .user{background:#7c3aed;margin-left:auto}
 .ai{background:#1e293b}
@@ -26,6 +26,10 @@ button{margin-top:10px;padding:10px;background:#7c3aed;border:none;color:white}
 <div class="sidebar">
   <div onclick="showChat()">Clinical Chat</div>
   <div onclick="showDiagnostics()">Diagnostics</div>
+  <div onclick="showDocs()">Documentation Assistant</div>
+  <div onclick="showDRG()">DRG Engine</div>
+  <div onclick="showCases()">Case Tracking</div>
+  <div onclick="showMetrics()">Metrics</div>
 </div>
 
 <div id="main"></div>
@@ -35,16 +39,9 @@ button{margin-top:10px;padding:10px;background:#7c3aed;border:none;color:white}
 <script>
 
 // ================= STATE =================
-
-let conversation = {
-  symptoms:"",
-  answers:[],
-  stage:"initial"
-};
-
-let pendingQuestions = [];
-let documentation = [];
-let latestAI = null;
+let conversation={symptoms:"",answers:[],stage:"initial"};
+let pendingQuestions=[];
+let documentation=[];
 
 // ================= CHAT =================
 
@@ -74,7 +71,6 @@ if(!t) return;
 addUser(t);
 input.value="";
 
-// INITIAL
 if(conversation.stage==="initial"){
 conversation.symptoms=t;
 conversation.stage="followup";
@@ -82,21 +78,16 @@ await askAI();
 return;
 }
 
-// FOLLOW-UP
 if(conversation.stage==="followup"){
 conversation.answers.push(t);
 
-if(pendingQuestions.length>0){
-pendingQuestions.shift();
-}
+if(pendingQuestions.length>0) pendingQuestions.shift();
 
-// ask next question
 if(pendingQuestions.length>0){
 addAI(pendingQuestions[0]);
 return;
 }
 
-// FINAL
 conversation.stage="final";
 await askAI(true);
 return;
@@ -117,55 +108,26 @@ body:JSON.stringify(conversation)
 });
 
 const data=await res.json();
-latestAI=data;
 
 chat.lastChild.remove();
 
-// FOLLOW-UP MODE
 if(!final && data.follow_up_questions?.length){
 pendingQuestions=data.follow_up_questions;
 addAI(pendingQuestions[0]);
 return;
 }
 
-// FINAL MODE
 renderFinal(data);
 }
 
-// ================= FINAL =================
-
 function renderFinal(data){
 
-let out="";
+let out=`<b>${data.overall_assessment}</b><br>`;
 
-if(data.red_flags?.length){
-out+=`<b style="color:red">⚠️ Red Flags</b><br>`;
-data.red_flags.forEach(r=>out+=`• ${r}<br>`);
-out+="<br>";
-}
-
-out+=`<b>Triage:</b> ${data.triage_score}/100<br>`;
-out+=`<b>Urgency:</b> ${data.urgency}<br><br>`;
-
-if(data.conditions){
-data.conditions.forEach(c=>{
-out+=`• ${c.name} (${c.likelihood})<br>`;
-});
-}
-
-out+=`<br>${data.overall_assessment}`;
-
-// FUNDING PROMPTS
 if(data.revenue_prompts){
-out+=`<br><br><b>Click to add:</b><br>`;
 data.revenue_prompts.forEach(p=>{
-out+=`<span class="clickable" onclick="addDoc('${p.message}')">${p.message} → $${p.value}</span><br>`;
+out+=`<br><span class="clickable" onclick="addDoc('${p.message}')">${p.message}</span>`;
 });
-}
-
-// FUNDING
-if(data.funding){
-out+=`<br><br>Funding: $${data.funding.baseline} → $${data.funding.potential}`;
 }
 
 addAI(out);
@@ -185,8 +147,6 @@ a.href=URL.createObjectURL(blob);
 a.download="note.txt";
 a.click();
 }
-
-// ================= RESET =================
 
 function newConsult(){
 conversation={symptoms:"",answers:[],stage:"initial"};
@@ -228,6 +188,74 @@ body:JSON.stringify({description:desc.value,imageBase64:base64})
 const data=await res.json();
 
 out.innerHTML=data.image_assessment;
+}
+
+// ================= DOC ASSIST =================
+
+function showDocs(){
+main.innerHTML=`
+<textarea id="docNote"></textarea>
+<button onclick="analyse()">Analyse</button>
+<div id="out"></div>
+`;
+}
+
+async function analyse(){
+const res=await fetch("/ai/clinical-assist",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({note:docNote.value})
+});
+const data=await res.json();
+out.innerHTML=data.suggestions.join("<br>");
+}
+
+// ================= DRG =================
+
+function showDRG(){
+main.innerHTML=`
+<input id="dx">
+<button onclick="runDRG()">Estimate</button>
+<div id="out"></div>
+`;
+}
+
+async function runDRG(){
+const res=await fetch("/drg/estimate",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({diagnosis:dx.value})
+});
+const data=await res.json();
+
+out.innerHTML=`$${data.funding}
+<input id="actual">
+<button onclick="save(${data.funding})">Save</button>`;
+}
+
+async function save(pred){
+await fetch("/pilot/track",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({predicted:pred,actual:Number(actual.value)})
+});
+alert("Saved");
+}
+
+// ================= CASES =================
+
+async function showCases(){
+const res=await fetch("/pilot/data");
+const data=await res.json();
+main.innerHTML=data.map(r=>`${r.predicted} vs ${r.actual}<br>`).join("");
+}
+
+// ================= METRICS =================
+
+async function showMetrics(){
+const res=await fetch("/pilot/metrics");
+const d=await res.json();
+main.innerHTML=`Predicted:${d.predicted}<br>Actual:${d.actual}<br>Delta:${d.delta}`;
 }
 
 showChat();
