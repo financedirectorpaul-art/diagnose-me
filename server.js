@@ -24,9 +24,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// =====================================================
-// FUNDING / REVENUE LOGIC
-// =====================================================
+// ================= FUNDING =================
 
 function estimateFunding(text = "") {
   const t = String(text).toLowerCase();
@@ -36,7 +34,7 @@ function estimateFunding(text = "") {
   if (t.includes("respiratory")) weight = 2.2;
   if (t.includes("failure")) weight = 2.5;
   if (t.includes("sepsis")) weight = 2.8;
-  if (t.includes("trauma") || t.includes("fracture")) weight = 1.9;
+  if (t.includes("trauma") || t.includes("fracture") || t.includes("broken")) weight = 1.9;
   if (t.includes("infection") || t.includes("cellulitis")) weight = 1.7;
   if (t.includes("stroke") || t.includes("neurological")) weight = 2.6;
   if (t.includes("chest pain") || t.includes("cardiac")) weight = 2.4;
@@ -49,39 +47,114 @@ function generateRevenuePrompts(text = "") {
   const prompts = [];
 
   if (!t.includes("severity")) {
-    prompts.push({
-      message: "Document severity of illness",
-      value: 1500
-    });
+    prompts.push({ message: "Document severity of illness", value: 1500 });
   }
 
   if (t.includes("shortness of breath") || t.includes("sob") || t.includes("respiratory")) {
-    prompts.push({
-      message: "Clarify respiratory failure / oxygen requirement if clinically present",
-      value: 2000
-    });
+    prompts.push({ message: "Clarify respiratory failure / oxygen requirement if clinically present", value: 2000 });
   }
 
   if (t.includes("infection") || t.includes("fever") || t.includes("tachycardia")) {
-    prompts.push({
-      message: "Assess and document sepsis criteria if clinically present",
-      value: 3000
-    });
+    prompts.push({ message: "Assess and document sepsis criteria if clinically present", value: 3000 });
+  }
+
+  if (t.includes("broken") || t.includes("fracture") || t.includes("fall") || t.includes("injury") || t.includes("trauma")) {
+    prompts.push({ message: "Document mechanism of injury, neurovascular status and imaging findings", value: 1800 });
   }
 
   if (!t.includes("comorbid") && !t.includes("diabetes") && !t.includes("copd")) {
-    prompts.push({
-      message: "Document active comorbidities affecting care",
-      value: 1200
-    });
+    prompts.push({ message: "Document active comorbidities affecting care", value: 1200 });
   }
 
   return prompts;
 }
 
-// =====================================================
-// CLINICAL CHAT
-// =====================================================
+// ================= CLINICAL GUARDRAILS =================
+
+function hasTraumaPattern(text = "") {
+  const t = String(text).toLowerCase();
+  return (
+    t.includes("broken") ||
+    t.includes("fracture") ||
+    t.includes("fall") ||
+    t.includes("injury") ||
+    t.includes("trauma") ||
+    t.includes("twisted") ||
+    t.includes("sprain") ||
+    t.includes("deformed") ||
+    t.includes("cannot weight bear") ||
+    t.includes("can’t weight bear")
+  );
+}
+
+function hasInfectionPattern(text = "") {
+  const t = String(text).toLowerCase();
+  return (
+    t.includes("fever") ||
+    t.includes("pus") ||
+    t.includes("infection") ||
+    t.includes("cellulitis") ||
+    t.includes("chills") ||
+    t.includes("red hot")
+  );
+}
+
+function applyClinicalGuardrails(parsed, inputText) {
+  const text = String(inputText || "").toLowerCase();
+
+  if (hasTraumaPattern(text)) {
+    parsed.conditions = [
+      {
+        name: "Fracture or suspected fracture",
+        likelihood: "high",
+        reason: "The description suggests a traumatic bone injury. A broken leg or suspected fracture should be treated as a musculoskeletal injury until assessed clinically and with imaging."
+      },
+      {
+        name: "Soft tissue injury",
+        likelihood: "moderate",
+        reason: "Trauma can also involve muscle, ligament, tendon or soft tissue injury."
+      },
+      {
+        name: "Dislocation or significant joint injury",
+        likelihood: "moderate",
+        reason: "If there is deformity, severe pain, abnormal alignment or loss of function, dislocation or joint injury should be considered."
+      }
+    ];
+
+    parsed.overall_assessment =
+      "This presentation is most consistent with a trauma-related limb injury, including possible fracture. Assessment should focus on pain severity, deformity, weight-bearing ability, swelling, open wounds, circulation, sensation and movement.";
+
+    parsed.follow_up_questions = [
+      "How did the injury happen?",
+      "Is there visible deformity or abnormal angling?",
+      "Can the person put any weight on it?",
+      "Is there numbness, tingling, coldness, colour change, or reduced movement?",
+      "Is there an open wound, severe swelling, or uncontrolled bleeding?"
+    ];
+
+    parsed.triage_score = Math.max(Number(parsed.triage_score || 0), 70);
+    parsed.urgency = "HIGH";
+    parsed.red_flags = [
+      "Possible fracture",
+      "Check circulation, sensation and movement",
+      "Urgent imaging may be required"
+    ];
+    parsed.advice =
+      "Avoid weight-bearing, immobilise the limb if safe, and seek urgent medical assessment. If there is deformity, severe pain, an open wound, loss of sensation, a cold or blue foot, or major trauma, call emergency services.";
+  }
+
+  if (hasTraumaPattern(text) && !hasInfectionPattern(text)) {
+    const badTerms = ["meningitis", "viral infection", "flu", "common cold"];
+    parsed.conditions = (parsed.conditions || []).filter(c => {
+      const name = String(c.name || "").toLowerCase();
+      return !badTerms.some(term => name.includes(term));
+    });
+  }
+
+  return parsed;
+}
+
+// ================= CLINICAL CHAT =================
 
 app.post("/ai/personal-check", async (req, res) => {
   try {
@@ -110,16 +183,18 @@ Return ONLY valid JSON:
 }
 
 Rules:
+- First classify the case: trauma, infection, cardiac, neurological, respiratory, abdominal, mental health, skin, musculoskeletal, or general.
+- If symptoms mention broken, fracture, fall, injury, trauma, deformity, or inability to weight-bear, prioritise fracture, dislocation, soft tissue injury and neurovascular compromise.
+- Do NOT suggest meningitis, viral infection, flu or unrelated infection unless fever, headache, neck stiffness, rash, confusion, chills, pus, cellulitis or systemic symptoms are present.
+- If trauma is present, ask about mechanism, deformity, weight-bearing, swelling, open wound, numbness, colour, temperature and pulses.
+- If chest pain, stroke symptoms, severe shortness of breath, severe bleeding, open fracture, blue/cold limb or loss of consciousness are present, urgency should be HIGH or EMERGENCY.
 - Do not diagnose definitively.
-- Include at least two possible conditions where appropriate.
-- Include red flags if present.
-- Ask clinically useful follow-up questions.
-- EMERGENCY means potentially life-threatening symptoms requiring urgent care.
+- Include follow-up questions unless the case is clearly an emergency.
 `
         },
         { role: "user", content: combined }
       ],
-      temperature: 0.3
+      temperature: 0.2
     });
 
     let parsed;
@@ -137,6 +212,8 @@ Rules:
         advice: "Monitor symptoms and seek medical care if symptoms worsen or concern you."
       };
     }
+
+    parsed = applyClinicalGuardrails(parsed, combined);
 
     const base = estimateFunding(combined);
     const prompts = generateRevenuePrompts(combined);
@@ -157,9 +234,7 @@ Rules:
   }
 });
 
-// =====================================================
-// DOCUMENTATION ASSISTANT
-// =====================================================
+// ================= DOCUMENTATION ASSISTANT =================
 
 app.post("/ai/clinical-assist", async (req, res) => {
   try {
@@ -186,7 +261,8 @@ Return ONLY valid JSON:
 Rules:
 - Do not suggest unsupported upcoding.
 - Suggestions must be documentation clarification opportunities only.
-- Focus on severity, comorbidities, complications, interventions, risk, phase of care, and functional impairment.
+- Focus on severity, comorbidities, complications, interventions, risk, phase of care, functional impairment and diagnostic evidence.
+- If trauma/fracture is mentioned, prompt for mechanism of injury, imaging result, neurovascular status, open/closed fracture, laterality and treatment.
 `
         },
         { role: "user", content: note || "" }
@@ -226,9 +302,7 @@ Rules:
   }
 });
 
-// =====================================================
-// IMAGE + DIAGNOSTICS + ORDER DRAFTS
-// =====================================================
+// ================= IMAGE / DIAGNOSTICS / ORDERS =================
 
 app.post("/ai/diagnostics-assist", async (req, res) => {
   try {
@@ -273,6 +347,7 @@ Return ONLY valid JSON:
 Rules:
 - Do not provide a definitive diagnosis from an image.
 - If image quality is poor, say so.
+- Trauma symptoms should prioritise fracture, dislocation, wound, swelling and neurovascular status.
 - Do not autonomously order pathology or imaging.
 - Generate clinician-reviewable diagnostic request drafts only.
 - Escalate chest pain, stroke symptoms, severe infection, necrosis, severe trauma, uncontrolled bleeding, or severe shortness of breath.
@@ -333,9 +408,7 @@ Rules:
   }
 });
 
-// =====================================================
-// DRG / FUNDING ESTIMATOR
-// =====================================================
+// ================= DRG / FUNDING ESTIMATOR =================
 
 app.post("/drg/estimate", (req, res) => {
   try {
@@ -346,9 +419,7 @@ app.post("/drg/estimate", (req, res) => {
   }
 });
 
-// =====================================================
-// DATABASE
-// =====================================================
+// ================= DATABASE =================
 
 app.post("/pilot/track", async (req, res) => {
   try {
@@ -406,9 +477,7 @@ app.get("/pilot/metrics", async (req, res) => {
   }
 });
 
-// =====================================================
-// FRONTEND
-// =====================================================
+// ================= FRONTEND =================
 
 app.use(express.static(path.join(__dirname, "public")));
 
