@@ -1,21 +1,23 @@
-// server.js - DOCTORPD Ultimate Backend (Full CommonJS Version - Render Compatible)
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
-const Database = require('better-sqlite3');
-const { Deepgram } = require('@deepgram/sdk');
+// server.js - DOCTORPD Ultimate Backend (Full ES Module Version for Render)
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import multer from 'multer';
+import cors from 'cors';
+import path from 'path';
+import Database from 'better-sqlite3';
+import { Deepgram } from '@deepgram/sdk';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
-const server = http.createServer(app);
+const server = createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 const upload = multer({ storage: multer.memoryStorage() });
 const db = new Database('doctorpd.db');
@@ -108,7 +110,7 @@ app.post('/gdpr/withdraw-consent', (req, res) => {
   res.json({ success: true });
 });
 
-// ====================== ORIGINAL AI ENDPOINTS ======================
+// ====================== AI ENDPOINTS ======================
 app.post('/ai/personal-check', (req, res) => {
   res.json({
     follow_up_questions: req.body.stage === "initial" ? ["Duration of symptoms?", "Any fever?", "Any recent injury?"] : [],
@@ -196,7 +198,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// ====================== HEALTH CHECK ======================
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'DOCTORPD', model: 'nova-3-medical' });
 });
@@ -204,6 +206,4 @@ app.get('/health', (req, res) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`🚀 DOCTORPD ULTIMATE running at http://localhost:${PORT}`);
-  console.log('✅ Nova-3 Medical realtime transcription active');
-  console.log('✅ GDPR Article 30 audit logging active');
 });
