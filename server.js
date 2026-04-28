@@ -107,7 +107,7 @@ function applyClinicalGuardrails(parsed, inputText) {
       {
         name: "Fracture or suspected fracture",
         likelihood: "high",
-        reason: "The description suggests a traumatic bone injury. A broken leg or suspected fracture should be treated as a musculoskeletal injury until assessed clinically and with imaging."
+        reason: "The description suggests a traumatic bone injury. A broken bone or suspected fracture should be treated as a musculoskeletal injury until assessed clinically and with imaging."
       },
       {
         name: "Soft tissue injury",
