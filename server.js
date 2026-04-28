@@ -10,7 +10,7 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,11 +24,43 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ================= PERSONAL AI (FULLY FIXED) =================
+// ================= FUNDING =================
+
+function estimateFunding(text = "") {
+  const t = text.toLowerCase();
+  let weight = 1.2;
+
+  if (t.includes("respiratory")) weight = 2.2;
+  if (t.includes("failure")) weight = 2.5;
+  if (t.includes("sepsis")) weight = 2.8;
+  if (t.includes("depression")) weight = 1.8;
+
+  return Math.round(weight * 7000);
+}
+
+function generatePrompts(text = "") {
+  const t = text.toLowerCase();
+  const prompts = [];
+
+  if (!t.includes("severity")) {
+    prompts.push({ message: "Add severity of illness → +$1500", value: 1500 });
+  }
+  if (t.includes("shortness of breath")) {
+    prompts.push({ message: "Consider respiratory failure → +$2000", value: 2000 });
+  }
+  if (t.includes("infection")) {
+    prompts.push({ message: "Assess for sepsis → +$3000", value: 3000 });
+  }
+
+  return prompts;
+}
+
+// ================= CLINICAL CHAT =================
 
 app.post("/ai/personal-check", async (req, res) => {
   try {
     const { symptoms, answers } = req.body;
+    const combined = `${symptoms} ${(answers || []).join(" ")}`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -36,90 +68,84 @@ app.post("/ai/personal-check", async (req, res) => {
         {
           role: "system",
           content: `
-You are a cautious clinical assistant.
-
-Return ONLY JSON:
-
+Return JSON:
 {
-  "conditions": [
-    {
-      "name": "",
-      "likelihood": "low | moderate | high",
-      "reason": ""
-    }
-  ],
+  "conditions": [],
   "overall_assessment": "",
   "follow_up_questions": [],
-  "urgency": "LOW | MEDIUM | HIGH"
+  "triage_score": 0,
+  "urgency": "",
+  "red_flags": [],
+  "advice": ""
 }
-
-Rules:
-- Always include at least 2 conditions
-- Always include follow-up questions unless confident
-- Do NOT include markdown
 `
         },
-        {
-          role: "user",
-          content: `
-Symptoms: ${symptoms}
-Answers so far: ${answers || ""}
-`
-        }
-      ],
-      temperature: 0.4
+        { role: "user", content: combined }
+      ]
     });
 
-    let text = completion.choices[0].message.content;
-
+    let parsed;
     try {
-      res.json(JSON.parse(text));
+      parsed = JSON.parse(completion.choices[0].message.content);
     } catch {
-      res.json({
+      parsed = {
         conditions: [],
-        overall_assessment: text,
+        overall_assessment: completion.choices[0].message.content,
         follow_up_questions: [],
-        urgency: "LOW"
-      });
+        triage_score: 30,
+        urgency: "LOW",
+        red_flags: [],
+        advice: "Monitor symptoms"
+      };
     }
 
+    const base = estimateFunding(combined);
+    const prompts = generatePrompts(combined);
+    const uplift = prompts.reduce((a, p) => a + p.value, 0);
+
+    parsed.funding = {
+      baseline: base,
+      potential: base + uplift,
+      uplift
+    };
+
+    parsed.revenue_prompts = prompts;
+
+    res.json(parsed);
+
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ================= CLINICAL ASSISTANT =================
+// ================= IMAGE + DIAGNOSTICS =================
 
-app.post("/ai/clinical-assist", async (req, res) => {
+app.post("/ai/diagnostics-assist", async (req, res) => {
   try {
-    const { note } = req.body;
+    const { description, imageBase64, mimeType } = req.body;
+
+    const content = [
+      { type: "text", text: `Clinical description: ${description}` }
+    ];
+
+    if (imageBase64) {
+      content.push({
+        type: "image_url",
+        image_url: { url: `data:${mimeType};base64,${imageBase64}` }
+      });
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "system",
-          content: `
-You are a clinical documentation improvement specialist.
-
-Identify:
-- missing diagnoses
-- missing severity
-- missing comorbidities
-- anything impacting DRG funding
-
-Return bullet points only.
-`
-        },
-        { role: "user", content: note }
-      ]
+      messages: [{ role: "user", content }]
     });
 
-    const text = completion.choices[0].message.content;
-
     res.json({
-      suggestions: text.split("\n").filter(x => x.trim() !== "")
+      image_assessment: completion.choices[0].message.content,
+      recommended_diagnostics: {
+        imaging: [{ test: "X-ray", reason: "rule out fracture", urgency: "routine" }],
+        pathology: [{ test: "FBC", reason: "infection markers", urgency: "routine" }]
+      }
     });
 
   } catch (err) {
@@ -131,29 +157,19 @@ Return bullet points only.
 
 app.post("/drg/estimate", (req, res) => {
   const { diagnosis } = req.body;
-
-  let weight = diagnosis?.toLowerCase().includes("depression") ? 1.8 : 1.2;
-  let funding = Math.round(weight * 7000);
-
-  res.json({ funding });
+  res.json({ funding: estimateFunding(diagnosis) });
 });
 
 // ================= DATABASE =================
 
 app.post("/pilot/track", async (req, res) => {
   const { predicted, actual } = req.body;
-
   await supabase.from("pilot_data").insert([{ predicted, actual }]);
-
   res.json({ success: true });
 });
 
 app.get("/pilot/data", async (req, res) => {
-  const { data } = await supabase
-    .from("pilot_data")
-    .select("*")
-    .order("created_at", { ascending: false });
-
+  const { data } = await supabase.from("pilot_data").select("*");
   res.json(data);
 });
 
@@ -171,7 +187,7 @@ app.get("/pilot/metrics", async (req, res) => {
   });
 });
 
-// ================= FRONTEND =================
+// ================= STATIC =================
 
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -179,8 +195,4 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
+app.listen(process.env.PORT || 10000);
