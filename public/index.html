@@ -1,21 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Diagnose Me</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body{font-family:Arial;background:#0f172a;color:white;margin:0}
-    .container{display:grid;grid-template-columns:250px 1fr;height:100vh}
-    .sidebar{background:#020617;padding:20px}
-    .sidebar div{margin-bottom:10px;cursor:pointer}
-    .chat{padding:20px;overflow-y:auto;height:70vh}
-    .bubble{padding:10px;margin:10px;border-radius:10px;max-width:70%}
-    .user{background:#7c3aed;margin-left:auto}
-    .ai{background:#1e293b}
-    input,textarea{width:100%;padding:10px;margin-top:10px;background:#020617;color:white;border:1px solid #334155}
-    button{margin-top:10px;padding:10px;background:#7c3aed;border:none;color:white}
-    .clickable{color:#a78bfa;cursor:pointer}
-  </style>
+<title>Diagnose Me</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+body{font-family:Arial;background:#0f172a;color:white;margin:0}
+.container{display:grid;grid-template-columns:260px 1fr;height:100vh}
+.sidebar{background:#020617;padding:20px}
+.sidebar div{margin-bottom:10px;cursor:pointer}
+.chat{padding:20px;height:60vh;overflow:auto}
+.bubble{padding:10px;margin:10px;border-radius:10px;max-width:70%}
+.user{background:#7c3aed;margin-left:auto}
+.ai{background:#1e293b}
+input,textarea{width:100%;padding:10px;margin-top:10px;background:#020617;color:white;border:1px solid #334155}
+button{margin-top:10px;padding:10px;background:#7c3aed;border:none;color:white}
+.clickable{color:#a78bfa;cursor:pointer}
+</style>
 </head>
 
 <body>
@@ -25,6 +25,10 @@
 <div class="sidebar">
   <div onclick="showChat()">Clinical Chat</div>
   <div onclick="showDiagnostics()">Diagnostics</div>
+  <div onclick="showDocs()">Documentation Assistant</div>
+  <div onclick="showDRG()">DRG Engine</div>
+  <div onclick="showCases()">Case Tracking</div>
+  <div onclick="showMetrics()">Metrics</div>
 </div>
 
 <div id="main"></div>
@@ -33,110 +37,171 @@
 
 <script>
 
+// ================= STATE =================
 let conversation={symptoms:"",answers:[]};
 let documentation=[];
 
 // ================= CHAT =================
 
 function showChat(){
-  document.getElementById("main").innerHTML=`
-    <div id="chat" class="chat"></div>
-    <input id="input" placeholder="Describe symptoms">
-    <button onclick="send()">Send</button>
-    <textarea id="note"></textarea>
-    <button onclick="downloadNote()">Download Note</button>
-  `;
+main.innerHTML=`
+<div id="chat" class="chat"></div>
+<input id="input" placeholder="Describe symptoms">
+<button onclick="send()">Send</button>
+<textarea id="note"></textarea>
+<button onclick="downloadNote()">Download Note</button>
+`;
 }
 
-function addUser(t){
-  chat.innerHTML+=`<div class="bubble user">${t}</div>`;
-}
-
-function addAI(t){
-  chat.innerHTML+=`<div class="bubble ai">${t}</div>`;
-}
+function addUser(t){chat.innerHTML+=`<div class="bubble user">${t}</div>`}
+function addAI(t){chat.innerHTML+=`<div class="bubble ai">${t}</div>`}
 
 async function send(){
-  const t=input.value;
-  addUser(t);
-  input.value="";
+let t=input.value;
+addUser(t); input.value="";
 
-  if(!conversation.symptoms) conversation.symptoms=t;
-  else conversation.answers.push(t);
+if(!conversation.symptoms) conversation.symptoms=t;
+else conversation.answers.push(t);
 
-  addAI("Thinking...");
+addAI("Thinking...");
 
-  const res=await fetch("/ai/personal-check",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json"},
-    body:JSON.stringify(conversation)
-  });
+const res=await fetch("/ai/personal-check",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify(conversation)
+});
 
-  const data=await res.json();
+const data=await res.json();
 
-  let out=`<b>Assessment:</b><br>${data.overall_assessment}`;
+let out=`<b>${data.overall_assessment}</b>`;
 
-  if(data.revenue_prompts){
-    out+=`<br><br><b>Click to add:</b><br>`;
-    data.revenue_prompts.forEach(p=>{
-      out+=`<span class="clickable" onclick="addDoc('${p.message}')">${p.message}</span><br>`;
-    });
-  }
-
-  addAI(out);
+if(data.revenue_prompts){
+out+=`<br><br>`;
+data.revenue_prompts.forEach(p=>{
+out+=`<span class="clickable" onclick="addDoc('${p.message}')">${p.message}</span><br>`;
+});
 }
 
-// ================= DOC =================
+addAI(out);
+}
 
 function addDoc(t){
-  documentation.push(t);
-  note.value=documentation.join("\n");
+documentation.push(t);
+note.value=documentation.join("\n");
 }
 
 function downloadNote(){
-  const blob=new Blob([note.value]);
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="note.txt";
-  a.click();
+const blob=new Blob([note.value]);
+const a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="note.txt";
+a.click();
 }
 
 // ================= DIAGNOSTICS =================
 
 function showDiagnostics(){
-  document.getElementById("main").innerHTML=`
-    <textarea id="desc" placeholder="Describe issue"></textarea>
-    <input type="file" id="img">
-    <button onclick="runDiag()">Analyse</button>
-    <div id="out"></div>
-  `;
+main.innerHTML=`
+<textarea id="desc"></textarea>
+<input type="file" id="img">
+<button onclick="runDiag()">Analyse</button>
+<div id="out"></div>
+`;
 }
 
 async function runDiag(){
-  const file=img.files[0];
-  let base64=null;
+let file=img.files[0];
+let base64=null;
 
-  if(file){
-    const reader=new FileReader();
-    base64=await new Promise(r=>{
-      reader.onload=()=>r(reader.result.split(",")[1]);
-      reader.readAsDataURL(file);
-    });
-  }
+if(file){
+const reader=new FileReader();
+base64=await new Promise(r=>{
+reader.onload=()=>r(reader.result.split(",")[1]);
+reader.readAsDataURL(file);
+});
+}
 
-  const res=await fetch("/ai/diagnostics-assist",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json"},
-    body:JSON.stringify({description:desc.value,imageBase64:base64})
-  });
+const res=await fetch("/ai/diagnostics-assist",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({description:desc.value,imageBase64:base64})
+});
 
-  const data=await res.json();
+const data=await res.json();
 
-  out.innerHTML=`
-    <b>Image Assessment:</b><br>${data.image_assessment}<br><br>
-    <b>Imaging:</b><br>${data.recommended_diagnostics.imaging.map(x=>x.test).join("<br>")}<br><br>
-    <b>Pathology:</b><br>${data.recommended_diagnostics.pathology.map(x=>x.test).join("<br>")}
-  `;
+out.innerHTML=data.image_assessment;
+}
+
+// ================= DOC ASSIST =================
+
+function showDocs(){
+main.innerHTML=`
+<textarea id="docNote"></textarea>
+<button onclick="analyse()">Analyse</button>
+<div id="out"></div>
+`;
+}
+
+async function analyse(){
+const res=await fetch("/ai/clinical-assist",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({note:docNote.value})
+});
+
+const data=await res.json();
+out.innerHTML=data.suggestions.join("<br>");
+}
+
+// ================= DRG =================
+
+function showDRG(){
+main.innerHTML=`
+<input id="dx">
+<button onclick="runDRG()">Estimate</button>
+<div id="out"></div>
+`;
+}
+
+async function runDRG(){
+const res=await fetch("/drg/estimate",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({diagnosis:dx.value})
+});
+
+const data=await res.json();
+
+out.innerHTML=`$${data.funding}
+<input id="actual">
+<button onclick="save(${data.funding})">Save</button>`;
+}
+
+async function save(pred){
+await fetch("/pilot/track",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({predicted:pred,actual:Number(actual.value)})
+});
+alert("Saved");
+}
+
+// ================= CASES =================
+
+async function showCases(){
+const res=await fetch("/pilot/data");
+const data=await res.json();
+
+main.innerHTML=data.map(r=>`${r.predicted} vs ${r.actual}<br>`).join("");
+}
+
+// ================= METRICS =================
+
+async function showMetrics(){
+const res=await fetch("/pilot/metrics");
+const d=await res.json();
+
+main.innerHTML=`Predicted:${d.predicted}<br>Actual:${d.actual}<br>Delta:${d.delta}`;
 }
 
 showChat();
