@@ -1,61 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Diagnose Me</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-
-<style>
-body{font-family:Arial;background:#0f172a;margin:0;color:#e5e7eb}
-.container{display:grid;grid-template-columns:260px 1fr;height:100vh}
-.sidebar{background:#020617;padding:20px}
-.sidebar div{margin-bottom:10px;cursor:pointer}
-.chat{padding:20px;height:55vh;overflow:auto}
-.bubble{padding:10px;margin:10px;border-radius:10px;max-width:70%}
-.user{background:#7c3aed;margin-left:auto}
-.ai{background:#1e293b}
-input,textarea{width:100%;padding:10px;margin-top:10px;background:#020617;color:white;border:1px solid #334155}
-button{margin-top:10px;padding:10px;background:#7c3aed;border:none;color:white}
-.clickable{color:#a78bfa;cursor:pointer}
-</style>
-</head>
-
-<body>
-
-<div class="container">
-
-<div class="sidebar">
-  <div onclick="showChat()">Clinical Chat</div>
-  <div onclick="showDiagnostics()">Diagnostics</div>
-  <div onclick="showDocs()">Documentation Assistant</div>
-  <div onclick="showDRG()">DRG Engine</div>
-  <div onclick="showCases()">Case Tracking</div>
-  <div onclick="showMetrics()">Metrics</div>
+<button onclick="downloadFHIR()">Download</button>
 </div>
 
-<div id="main"></div>
-
-</div>
-
-<script>
-
-// ================= STATE =================
-let conversation={symptoms:"",answers:[],stage:"initial"};
-let pendingQuestions=[];
-let documentation=[];
-
-// ================= CHAT =================
-
-function showChat(){
-main.innerHTML=`
-<div id="chat" class="chat"></div>
+<div style="padding:20px">
 <input id="input" placeholder="Describe symptoms">
 <button onclick="send()">Send</button>
-<textarea id="note"></textarea>
-<button onclick="downloadNote()">Download Note</button>
-<button onclick="newConsult()">New Consultation</button>
+<button onclick="reset()">New</button>
+</div>
 `;
 
-addAI("Start a consultation — tell me your symptoms.");
+addAI("Start consultation — tell me symptoms.");
 }
 
 function addUser(t){chat.innerHTML+=`<div class="bubble user">${t}</div>`}
@@ -108,6 +61,7 @@ body:JSON.stringify(conversation)
 });
 
 const data=await res.json();
+latestAI=data;
 
 chat.lastChild.remove();
 
@@ -122,18 +76,48 @@ renderFinal(data);
 
 function renderFinal(data){
 
-let out=`<b>${data.overall_assessment}</b><br>`;
+let out="";
+
+if(data.red_flags?.length){
+out+=`<b style="color:red">⚠️ Red Flags</b><br>`;
+data.red_flags.forEach(r=>out+=`• ${r}<br>`);
+}
+
+out+=`<br><b>${data.overall_assessment}</b><br>`;
+
+if(data.conditions){
+data.conditions.forEach(c=>{
+out+=`• ${c.name} (${c.likelihood})<br>`;
+});
+}
 
 if(data.revenue_prompts){
+out+=`<br><b>Documentation</b><br>`;
 data.revenue_prompts.forEach(p=>{
-out+=`<br><span class="clickable" onclick="addDoc('${p.message}')">${p.message}</span>`;
+out+=`<span class="clickable" onclick="addDoc('${p.message}')">${p.message}</span><br>`;
 });
 }
 
 addAI(out);
 }
 
-// ================= DOC =================
+// ================= NOTE =================
+
+function generateNote(){
+note.value=`Complaint: ${conversation.symptoms}
+Findings: ${conversation.answers.join(",")}
+Assessment: ${latestAI?.overall_assessment}`;
+}
+
+function generateFHIR(){
+fhir.value=JSON.stringify({
+resourceType:"Bundle",
+entry:[
+{resource:{resourceType:"Condition",code:{text:conversation.symptoms}}},
+{resource:{resourceType:"Observation",valueInteger:latestAI?.triage_score}}
+]
+},null,2);
+}
 
 function addDoc(t){
 documentation.push(t);
@@ -148,7 +132,15 @@ a.download="note.txt";
 a.click();
 }
 
-function newConsult(){
+function downloadFHIR(){
+const blob=new Blob([fhir.value]);
+const a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="fhir.json";
+a.click();
+}
+
+function reset(){
 conversation={symptoms:"",answers:[],stage:"initial"};
 pendingQuestions=[];
 chat.innerHTML="";
@@ -159,10 +151,13 @@ addAI("New consultation started.");
 
 function showDiagnostics(){
 main.innerHTML=`
+<div class="card">
 <textarea id="desc"></textarea>
 <input type="file" id="img">
+<img id="preview" class="preview" style="display:none">
 <button onclick="runDiag()">Analyse</button>
 <div id="out"></div>
+</div>
 `;
 }
 
@@ -172,6 +167,9 @@ let file=img.files[0];
 let base64=null;
 
 if(file){
+preview.src=URL.createObjectURL(file);
+preview.style.display="block";
+
 const reader=new FileReader();
 base64=await new Promise(r=>{
 reader.onload=()=>r(reader.result.split(",")[1]);
@@ -186,17 +184,24 @@ body:JSON.stringify({description:desc.value,imageBase64:base64})
 });
 
 const data=await res.json();
+latestDiagnostic=data;
 
-out.innerHTML=data.image_assessment;
+out.innerHTML=`
+<b>Assessment</b><br>${data.image_assessment}<br><br>
+<b>Imaging</b><br>${data.recommended_diagnostics.imaging.map(x=>x.test).join("<br>")}<br><br>
+<b>Pathology</b><br>${data.recommended_diagnostics.pathology.map(x=>x.test).join("<br>")}
+`;
 }
 
 // ================= DOC ASSIST =================
 
 function showDocs(){
 main.innerHTML=`
-<textarea id="docNote"></textarea>
+<div class="card">
+<textarea id="doc"></textarea>
 <button onclick="analyse()">Analyse</button>
 <div id="out"></div>
+</div>
 `;
 }
 
@@ -204,7 +209,7 @@ async function analyse(){
 const res=await fetch("/ai/clinical-assist",{
 method:"POST",
 headers:{ "Content-Type":"application/json"},
-body:JSON.stringify({note:docNote.value})
+body:JSON.stringify({note:doc.value})
 });
 const data=await res.json();
 out.innerHTML=data.suggestions.join("<br>");
@@ -214,9 +219,11 @@ out.innerHTML=data.suggestions.join("<br>");
 
 function showDRG(){
 main.innerHTML=`
+<div class="card">
 <input id="dx">
 <button onclick="runDRG()">Estimate</button>
 <div id="out"></div>
+</div>
 `;
 }
 
@@ -228,18 +235,7 @@ body:JSON.stringify({diagnosis:dx.value})
 });
 const data=await res.json();
 
-out.innerHTML=`$${data.funding}
-<input id="actual">
-<button onclick="save(${data.funding})">Save</button>`;
-}
-
-async function save(pred){
-await fetch("/pilot/track",{
-method:"POST",
-headers:{ "Content-Type":"application/json"},
-body:JSON.stringify({predicted:pred,actual:Number(actual.value)})
-});
-alert("Saved");
+out.innerHTML=`$${data.funding}`;
 }
 
 // ================= CASES =================
