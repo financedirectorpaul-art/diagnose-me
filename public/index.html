@@ -4,245 +4,272 @@
   <title>Diagnose Me</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial;
-      margin: 0;
-      background: #0f172a;
-      color: #e5e7eb;
-    }
-
-    .header {
-      padding: 16px;
-      background: #020617;
-      border-bottom: 1px solid #1e293b;
-      font-weight: bold;
-    }
-
-    .chat {
-      height: calc(100vh - 140px);
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .bubble {
-      padding: 12px 14px;
-      margin-bottom: 10px;
-      border-radius: 12px;
-      max-width: 75%;
-      white-space: pre-wrap;
-    }
-
-    .user {
-      background: #7c3aed;
-      align-self: flex-end;
-    }
-
-    .ai {
-      background: #1e293b;
-    }
-
-    .inputBar {
-      position: sticky;
-      bottom: 0;
-      background: #020617;
-      padding: 12px;
-      border-top: 1px solid #1e293b;
-      display: flex;
-      gap: 10px;
-    }
-
-    input {
-      flex: 1;
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #334155;
-      background: #020617;
-      color: white;
-    }
-
-    button {
-      background: #7c3aed;
-      border: none;
-      padding: 10px 14px;
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    textarea {
-      width: 100%;
-      height: 150px;
-      margin-top: 10px;
-      background: #020617;
-      color: white;
-      border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 10px;
-    }
-
-    .section {
-      padding: 20px;
-      border-top: 1px solid #1e293b;
-    }
+    body{margin:0;background:#0f172a;color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+    .layout{display:grid;grid-template-columns:260px 1fr;height:100vh}
+    .sidebar{background:#020617;border-right:1px solid #1e293b;padding:18px}
+    .brand{font-size:20px;font-weight:800;margin-bottom:20px}
+    .nav{padding:10px;border-radius:10px;cursor:pointer;margin-bottom:8px;color:#cbd5e1}
+    .nav:hover{background:#1e293b;color:white}
+    .main{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+    .doctor{display:flex;align-items:center;gap:12px;padding:14px 20px;background:#020617;border-bottom:1px solid #1e293b}
+    .avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#38bdf8);display:flex;align-items:center;justify-content:center;font-size:24px}
+    .doctor-name{font-weight:700}.doctor-sub{color:#94a3b8;font-size:13px}
+    .chat{flex:1;overflow-y:auto;padding:22px;scroll-behavior:smooth}
+    .row{display:flex;gap:10px;margin-bottom:12px}.user-row{justify-content:flex-end}
+    .bubble{max-width:75%;padding:13px 15px;border-radius:14px;line-height:1.45;white-space:pre-wrap}
+    .ai{background:#1e293b;border:1px solid #334155}.user{background:#7c3aed}
+    .inputbar{display:flex;gap:10px;padding:14px;background:#020617;border-top:1px solid #1e293b}
+    input,textarea{width:100%;box-sizing:border-box;background:#020617;color:white;border:1px solid #334155;border-radius:10px;padding:11px;margin-top:8px}
+    button{background:#7c3aed;color:white;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;margin-top:8px}
+    button.secondary{background:#334155}
+    .panel{padding:18px;background:#020617;border-top:1px solid #1e293b;max-height:340px;overflow-y:auto}
+    .card{background:#020617;border:1px solid #1e293b;border-radius:16px;padding:22px;margin:22px}
+    .box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:13px;margin-top:10px}
+    .clickable{color:#c4b5fd;text-decoration:underline;cursor:pointer}
+    table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border-bottom:1px solid #334155;padding:9px;text-align:left;vertical-align:top}th{color:#c4b5fd}
+    .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:16px}.metric b{display:block;font-size:24px;margin-top:5px}
+    pre{white-space:pre-wrap;max-width:600px}
   </style>
 </head>
+
 <body>
-
-<div class="header">Diagnose Me – Clinical AI</div>
-
-<div id="chat" class="chat"></div>
-
-<div class="inputBar">
-  <input id="input" placeholder="Describe symptoms..." />
-  <button onclick="send()">Send</button>
-</div>
-
-<div class="section">
-  <b>Structured Clinical Note</b>
-  <textarea id="note"></textarea>
-  <button onclick="copyNote()">Copy Note</button>
-</div>
-
-<div class="section">
-  <b>FHIR JSON</b>
-  <textarea id="fhir"></textarea>
-  <button onclick="copyFHIR()">Copy FHIR</button>
+<div class="layout">
+  <div class="sidebar">
+    <div class="brand">Diagnose Me</div>
+    <div class="nav" onclick="showChat()">Clinical Chat</div>
+    <div class="nav" onclick="showDiagnostics()">Diagnostics</div>
+    <div class="nav" onclick="showDocumentation()">Documentation Assistant</div>
+    <div class="nav" onclick="showFunding()">Funding Estimator</div>
+    <div class="nav" onclick="showCases()">Case Tracking</div>
+    <div class="nav" onclick="showMetrics()">Metrics</div>
+    <div class="nav" onclick="showAudit()">Audit Trail</div>
+  </div>
+  <div id="app" class="main"></div>
 </div>
 
 <script>
-let stage = "initial";
-let symptoms = "";
-let answers = [];
+let conversation={symptoms:"",answers:[],questionIndex:0};
+let latestAI=null;
+let documentation=[];
+let activePrompts=[];
+let isWaiting=false;
 
-function addUser(text){
-  const chat = document.getElementById("chat");
-  chat.innerHTML += `<div class="bubble user">${text}</div>`;
-  scroll();
+function money(n){return "$"+Number(n||0).toLocaleString();}
+function scrollChat(){const chat=document.getElementById("chat");if(chat)chat.scrollTop=chat.scrollHeight;}
+function copyText(id){navigator.clipboard.writeText(document.getElementById(id).value);alert("Copied");}
+
+function showChat(){
+  conversation={symptoms:"",answers:[],questionIndex:0};
+  latestAI=null;activePrompts=[];isWaiting=false;
+  document.getElementById("app").innerHTML=`
+    <div class="doctor"><div class="avatar">👩‍⚕️</div><div><div class="doctor-name">Dr. Elena</div><div class="doctor-sub">Clinical AI consultation assistant</div></div></div>
+    <div id="chat" class="chat"></div>
+    <div class="panel">
+      <b>Structured Clinical Note</b>
+      <textarea id="note"></textarea>
+      <button onclick="generateNote()">Generate Note</button>
+      <button class="secondary" onclick="copyText('note')">Copy Note</button>
+      <br><br>
+      <b>FHIR R4 Bundle</b>
+      <textarea id="fhir"></textarea>
+      <button onclick="generateFHIR()">Generate FHIR</button>
+      <button class="secondary" onclick="copyText('fhir')">Copy FHIR</button>
+      <br><br>
+      <b>Clinician Override</b>
+      <input id="overrideName" placeholder="Clinician name">
+      <textarea id="overrideReason" placeholder="Reason for override"></textarea>
+      <textarea id="overrideAssessment" placeholder="Clinician override assessment"></textarea>
+      <button onclick="submitOverride()">Submit Override</button>
+    </div>
+    <div class="inputbar">
+      <input id="input" placeholder="Describe symptoms or clinical presentation..." />
+      <button onclick="send()">Send</button>
+      <button class="secondary" onclick="showChat()">New</button>
+    </div>`;
+  document.getElementById("input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();send();}});
+  addAI("Hi, I'm Dr. Elena. How is the patient presenting today?");
 }
 
-function addAI(text){
-  const chat = document.getElementById("chat");
-  chat.innerHTML += `<div class="bubble ai">${text}</div>`;
-  scroll();
-}
-
-function scroll(){
-  const chat = document.getElementById("chat");
-  chat.scrollTop = chat.scrollHeight;
-}
+function addAI(text){const chat=document.getElementById("chat");chat.innerHTML+=`<div class="row"><div class="avatar" style="width:32px;height:32px;font-size:17px;">👩‍⚕️</div><div class="bubble ai">${text}</div></div>`;scrollChat();}
+function addUser(text){const chat=document.getElementById("chat");chat.innerHTML+=`<div class="row user-row"><div class="bubble user">${text}</div></div>`;scrollChat();}
 
 async function send(){
-  const input = document.getElementById("input");
-  const text = input.value.trim();
-  if(!text) return;
+  if(isWaiting)return;
+  const input=document.getElementById("input");
+  const text=input.value.trim();
+  if(!text)return;
+  addUser(text);input.value="";isWaiting=true;
 
-  addUser(text);
-  input.value = "";
-
-  if(stage === "initial"){
-    symptoms = text;
-    stage = "followup";
-  } else {
-    answers.push(text);
-  }
+  if(!conversation.symptoms){conversation.symptoms=text;}else{conversation.answers.push(text);conversation.questionIndex+=1;}
 
   addAI("Thinking...");
+  const res=await fetch("/ai/personal-check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(conversation)});
+  const data=await res.json();
+  document.getElementById("chat").lastElementChild.remove();
 
-  const res = await fetch("/ai/personal-check", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ symptoms, answers, stage })
-  });
+  if(data.mode==="question"){addAI(data.question);isWaiting=false;return;}
 
-  const data = await res.json();
-
-  document.querySelector(".ai:last-child").remove();
-
-  // Follow-up questions
-  if(data.follow_up_questions && data.follow_up_questions.length){
-    addAI(data.follow_up_questions[0]);
-    return;
-  }
-
-  stage = "final";
-
-  let output = "";
-
-  output += `Triage Score: ${data.triage_score}\n`;
-  output += `Urgency: ${data.urgency}\n\n`;
-
-  output += `Assessment:\n${data.overall_assessment}\n\n`;
-
-  if(data.icd){
-    output += `ICD-10 Suggestion:\n${data.icd.code} (${data.icd.description}) — ${data.icd.confidence}%\n\n`;
-  }
-
-  output += `CPT Suggestion: ${data.cpt}\n`;
-  output += `Denial Risk: ${data.denial_risk}\n`;
-
-  addAI(output);
-
-  generateNote(data);
-  generateFHIR(data);
+  latestAI=data;
+  renderFinal(data);
+  generateNote();
+  generateFHIR();
+  isWaiting=false;
 }
 
-function generateNote(data){
-  const note = `
+function renderFinal(data){
+  activePrompts=data.revenue_prompts||[];
+  let out="";
+  out+=`Triage Score: ${data.triage_score}/100\n`;
+  out+=`Urgency: ${data.urgency}\n`;
+  out+=`Confidence: ${data.confidence||"N/A"}%\n`;
+  out+=`Uncertainty: ${data.uncertainty||"N/A"}\n\n`;
+  out+=`Assessment:\n${data.overall_assessment}\n\n`;
+
+  if(data.differential?.length){
+    out+="Differential Ranking:\n";
+    data.differential.forEach(d=>{out+=`${d.rank}. ${d.condition} — ${d.probability}% (${d.likelihood})\nICD: ${d.icd_suggestion?.code||"N/A"} — ${d.icd_suggestion?.description||""}\n`;});
+    out+="\n";
+  }
+
+  if(data.conditions?.length){
+    out+="Possible Conditions:\n";
+    data.conditions.forEach(c=>{out+=`• ${c.name} (${c.likelihood}) — ${c.reason}\n`;});
+    out+="\n";
+  }
+
+  if(data.icd){out+=`ICD-10 Suggestion:\n${data.icd.code} (${data.icd.description}) — ${data.icd.confidence}%\n\n`;}
+  out+=`CPT Suggestion: ${data.cpt||"N/A"}\n`;
+  out+=`Denial Risk: ${data.denial_risk||"N/A"}\n\n`;
+
+  if(data.missing_information?.length){out+="Missing Information:\n";data.missing_information.forEach(m=>out+=`• ${m}\n`);out+="\n";}
+  if(data.funding){out+=`Funding Insight:\nBaseline: ${money(data.funding.baseline)}\nPotential: ${money(data.funding.potential)}\nUplift: ${money(data.funding.uplift)}\n\n`;}
+  if(data.advice){out+=`Advice:\n${data.advice}\n\n`;}
+  out+=data.legal_notice||"Decision support only. Requires clinician review.";
+
+  addAI(out);
+
+  if(activePrompts.length){
+    let html="<b>Documentation Opportunities</b><br>";
+    activePrompts.forEach((p,i)=>{html+=`<span class="clickable" onclick="addPrompt(${i})">• ${p.message} → ${money(p.value||p.estimated_uplift)}</span><br>`;});
+    addAI(html);
+  }
+}
+
+function addPrompt(i){const p=activePrompts[i];documentation.push(`${p.message||p.prompt} → ${money(p.value||p.estimated_uplift)}`);generateNote();}
+
+function generateNote(){
+  const note=`
+LEGAL NOTICE:
+Decision support only. Requires clinician review.
+
 PRESENTING COMPLAINT:
-${symptoms}
+${conversation.symptoms||"Not recorded"}
+
+RESPONSES:
+${conversation.answers.join("\n")||"Not recorded"}
 
 ASSESSMENT:
-${data.overall_assessment}
+${latestAI?.overall_assessment||"Not recorded"}
+
+DIFFERENTIAL:
+${(latestAI?.differential||[]).map(d=>`${d.rank}. ${d.condition} (${d.probability}%) ICD: ${d.icd_suggestion?.code||"N/A"}`).join("\n")||"Not recorded"}
 
 ICD:
-${data.icd?.code} - ${data.icd?.description}
+${latestAI?.icd?.code||"N/A"} - ${latestAI?.icd?.description||"N/A"}
+
+TRIAGE:
+Score: ${latestAI?.triage_score||"N/A"}
+Urgency: ${latestAI?.urgency||"N/A"}
+Confidence: ${latestAI?.confidence||"N/A"}
+
+DOCUMENTATION OPPORTUNITIES:
+${documentation.join("\n")||"None"}
 
 PLAN:
-- Clinical review
-- Confirm diagnosis
-- Manage accordingly
+- Clinician review required.
+- Confirm diagnosis clinically.
+- Validate coding with qualified coder.
+- Escalate if red flags or worsening symptoms.
 `;
-  document.getElementById("note").value = note.trim();
+  const el=document.getElementById("note");if(el)el.value=note.trim();
 }
 
-function generateFHIR(data){
-  const fhir = {
-    resourceType: "Bundle",
-    type: "collection",
-    entry: [
-      {
-        resource: {
-          resourceType: "Condition",
-          code: {
-            text: data.icd?.description
-          }
-        }
-      }
-    ]
-  };
-
-  document.getElementById("fhir").value = JSON.stringify(fhir, null, 2);
+function generateFHIR(){
+  const bundle={resourceType:"Bundle",type:"collection",timestamp:new Date().toISOString(),entry:[
+    {resource:{resourceType:"Patient",id:"patient-demo"}},
+    {resource:{resourceType:"Condition",code:{text:`${latestAI?.icd?.code||"N/A"} ${latestAI?.icd?.description||""}`},note:[{text:latestAI?.overall_assessment||""}]}},
+    {resource:{resourceType:"Observation",code:{text:"AI triage score"},valueInteger:latestAI?.triage_score||0}},
+    {resource:{resourceType:"Observation",code:{text:"AI confidence score"},valueInteger:latestAI?.confidence||0}}
+  ]};
+  const el=document.getElementById("fhir");if(el)el.value=JSON.stringify(bundle,null,2);
 }
 
-function copyNote(){
-  navigator.clipboard.writeText(document.getElementById("note").value);
+async function submitOverride(){
+  const payload={clinician:document.getElementById("overrideName").value,reason:document.getElementById("overrideReason").value,assessment:document.getElementById("overrideAssessment").value,original:latestAI};
+  await fetch("/clinical/override",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  documentation.push("CLINICIAN OVERRIDE: "+payload.assessment+" | Reason: "+payload.reason);
+  generateNote();
+  alert("Override logged");
 }
 
-function copyFHIR(){
-  navigator.clipboard.writeText(document.getElementById("fhir").value);
+function showDiagnostics(){
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Diagnostics</h2><textarea id="diagDescription" placeholder="Describe issue or image findings..."></textarea><input type="file" id="diagImage" accept="image/*"><button onclick="runDiagnostics()">Analyse</button><div id="diagOut"></div></div>`;
 }
 
-document.getElementById("input").addEventListener("keydown", e => {
-  if(e.key === "Enter"){
-    e.preventDefault();
-    send();
-  }
-});
+async function runDiagnostics(){
+  const description=document.getElementById("diagDescription").value;
+  const file=document.getElementById("diagImage").files[0];
+  let imageBase64="";
+  if(file){imageBase64=await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(",")[1]);reader.readAsDataURL(file);});}
+  const res=await fetch("/ai/diagnostics-assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({description,imageBase64})});
+  const d=await res.json();
+  document.getElementById("diagOut").innerHTML=`<div class="box"><b>Assessment</b><br>${d.image_assessment}</div><div class="box"><b>Triage</b><br>${d.triage.score} — ${d.triage.urgency}</div><div class="box"><b>Possible Conditions</b><br>${(d.possible_conditions||[]).map(x=>"• "+x.name+" — "+x.reason).join("<br>")}</div><div class="box"><b>Imaging</b><br>${d.recommended_diagnostics.imaging.map(x=>`${x.test} — ${x.reason}`).join("<br>")}</div><div class="box"><b>Pathology</b><br>${d.recommended_diagnostics.pathology.map(x=>`${x.test} — ${x.reason}`).join("<br>")||"None suggested"}</div>`;
+}
 
-addAI("Hi, I'm Dr. Elena. How is the patient presenting today?");
+function showDocumentation(){
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Documentation Assistant</h2><textarea id="docText"></textarea><button onclick="analyseDoc()">Analyse</button><div id="docOut"></div></div>`;
+}
+
+async function analyseDoc(){
+  const note=document.getElementById("docText").value;
+  const res=await fetch("/ai/clinical-assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note})});
+  const d=await res.json();
+  document.getElementById("docOut").innerHTML=`<div class="box"><b>Suggestions</b><br>${d.suggestions.map(x=>"• "+x).join("<br>")}</div><div class="box"><b>Funding Prompts</b><br>${d.funding_prompts.map(x=>"• "+x.prompt+" → "+money(x.estimated_uplift)).join("<br>")}</div><div class="box"><b>ICD Opportunities</b><br>${d.icd_opportunities.map(x=>"• "+x.indicative_code+" — "+x.description+" — "+x.documentation_needed).join("<br>")}</div><div class="box"><b>Audit Risks</b><br>${d.audit_risks.map(x=>"• "+x).join("<br>")}</div>`;
+}
+
+function showFunding(){
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Funding Estimator</h2><input id="dx" placeholder="Enter diagnosis"><button onclick="runFunding()">Estimate</button><div id="fundingOut"></div></div>`;
+}
+
+async function runFunding(){
+  const diagnosis=document.getElementById("dx").value;
+  const res=await fetch("/drg/estimate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({diagnosis})});
+  const d=await res.json();
+  document.getElementById("fundingOut").innerHTML=`<div class="box">Predicted Funding: <b>${money(d.funding)}</b><input id="actualFunding" placeholder="Actual funding"><button onclick="saveCase(${d.funding})">Save Case</button></div>`;
+}
+
+async function saveCase(predicted){
+  const actual=Number(document.getElementById("actualFunding").value||0);
+  await fetch("/pilot/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({predicted,actual})});
+  alert("Saved");
+}
+
+async function showCases(){
+  const res=await fetch("/pilot/data");const rows=await res.json();
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Case Tracking</h2><table><tr><th>ID</th><th>Patient</th><th>Predicted</th><th>Actual</th><th>Variance</th><th>Date</th></tr>${rows.map(r=>`<tr><td>${r.id}</td><td>${r.patientName}</td><td>${money(r.predicted)}</td><td>${money(r.actual)}</td><td>${money(r.actual-r.predicted)}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join("")}</table></div>`;
+}
+
+async function showMetrics(){
+  const res=await fetch("/pilot/metrics");const d=await res.json();
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Metrics</h2><div class="metric-grid"><div class="metric">Predicted<b>${money(d.predicted)}</b></div><div class="metric">Actual<b>${money(d.actual)}</b></div><div class="metric">Variance<b>${money(d.delta)}</b></div><div class="metric">Cases<b>${d.total}</b></div></div></div>`;
+}
+
+async function showAudit(){
+  const res=await fetch("/audit/data");const rows=await res.json();
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Audit Trail</h2><table><tr><th>Time</th><th>Action</th><th>Details</th></tr>${rows.map(r=>`<tr><td>${new Date(r.timestamp).toLocaleString()}</td><td>${r.action}</td><td><pre>${JSON.stringify(r.details,null,2)}</pre></td></tr>`).join("")}</table></div>`;
+}
+
+showChat();
 </script>
-
 </body>
 </html>
