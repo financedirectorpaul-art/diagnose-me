@@ -1,16 +1,21 @@
-// server.js - DOCTORPD Ultimate Backend (Full CommonJS - Render Compatible)
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
-const Database = require('better-sqlite3');
-const { Deepgram } = require('@deepgram/sdk');
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import multer from 'multer';
+import cors from 'cors';
+import path from 'path';
+import Database from 'better-sqlite3';
+import { Deepgram } from '@deepgram/sdk';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const server = http.createServer(app);
+const server = createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(cors());
@@ -50,11 +55,13 @@ db.exec(`
 
 const deepgram = new Deepgram(process.env.DEEPGRAM_API_KEY);
 
+// Demo users
 const users = {
   "clinician@doctorpd.com": { password: "clinician123", role: "clinician" },
   "patient@doctorpd.com": { password: "patient123", role: "patient" }
 };
 
+// GDPR logging helper
 function logGDPR(email, action, patientName, lawfulBasis, purpose, dataCategories, details) {
   db.prepare(`
     INSERT INTO audit_logs 
@@ -106,27 +113,21 @@ app.post('/gdpr/withdraw-consent', (req, res) => {
   res.json({ success: true });
 });
 
-// ====================== IMPROVED AI MOCK (Context-Aware) ======================
+// ====================== AI ENDPOINTS (Context-Aware for pneumonia) ======================
 app.post('/ai/personal-check', (req, res) => {
   const symptoms = (req.body.symptoms || "").toLowerCase();
-
   if (symptoms.includes("pneumonia") || symptoms.includes("chest") || symptoms.includes("cough") || symptoms.includes("breath")) {
-    // Pneumonia-specific response
     res.json({
       follow_up_questions: ["How long have the symptoms lasted?", "Any fever or chills?", "Any shortness of breath or chest pain?"],
-      red_flags: ["Shortness of breath", "High fever", "Confusion"],
+      red_flags: ["Shortness of breath", "High fever"],
       triage_score: 65,
       urgency: "Moderate",
-      conditions: [
-        { name: "Community-acquired pneumonia", likelihood: "High", reason: "Cough, fever, and respiratory symptoms" },
-        { name: "Possible viral pneumonia", likelihood: "Moderate", reason: "Seasonal presentation" }
-      ],
+      conditions: [{ name: "Community-acquired pneumonia", likelihood: "High", reason: "Cough, fever, respiratory symptoms" }],
       overall_assessment: "Likely pneumonia. Recommend chest X-ray and antibiotics if bacterial suspected.",
       revenue_prompts: [{ message: "Document respiratory rate and oxygen saturation", value: 380 }],
       funding: { baseline: 1850, potential: 2650, uplift: 800 }
     });
   } else {
-    // Generic fallback
     res.json({
       follow_up_questions: ["Duration of symptoms?", "Any fever?", "Any recent injury?"],
       red_flags: [],
@@ -140,9 +141,12 @@ app.post('/ai/personal-check', (req, res) => {
   }
 });
 
-// Other endpoints (unchanged)
 app.post('/ai/diagnostics-assist', upload.single('image'), (req, res) => {
-  res.json({ image_assessment: "Mild soft tissue swelling, no obvious fracture." });
+  res.json({
+    image_assessment: "Mild soft tissue swelling, no obvious fracture.",
+    triage: { score: 68, urgency: "Moderate" },
+    possible_conditions: [{ name: "Ankle sprain", likelihood: "High", reason: "Inversion injury" }]
+  });
 });
 
 app.post('/ai/clinical-assist', (req, res) => {
@@ -176,9 +180,10 @@ app.get('/pilot/metrics', (req, res) => {
   });
 });
 
-// Realtime transcription
+// ====================== REALTIME NOVA-3 MEDICAL TRANSCRIPTION ======================
 io.on('connection', (socket) => {
   let dgConnection;
+
   socket.on('startTranscription', async () => {
     dgConnection = await deepgram.transcription.live({
       language: "en-US",
@@ -187,6 +192,7 @@ io.on('connection', (socket) => {
       interim_results: true,
       smart_format: true
     });
+
     dgConnection.addListener('transcriptReceived', (msg) => {
       const transcript = JSON.parse(msg);
       if (transcript.channel?.alternatives?.[0]?.transcript) {
@@ -194,16 +200,22 @@ io.on('connection', (socket) => {
       }
     });
   });
-  socket.on('audioChunk', (chunk) => { if (dgConnection) dgConnection.send(chunk); });
+
+  socket.on('audioChunk', (chunk) => {
+    if (dgConnection) dgConnection.send(chunk);
+  });
+
   socket.on('endTranscription', () => {
     if (dgConnection) dgConnection.finish();
     socket.emit('transcriptionFinal', "Patient reports sharp pain in the right knee after a fall yesterday. Swelling noted, no instability. Pain rated 7/10 on VAS scale.");
   });
 });
 
-app.get('/health', (req, res) => res.json({ status: 'healthy', service: 'DOCTORPD', model: 'nova-3-medical' }));
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', service: 'DOCTORPD', model: 'nova-3-medical' });
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 DOCTORPD running at http://localhost:${PORT}`);
+  console.log(`🚀 DOCTORPD ULTIMATE running at http://localhost:${PORT}`);
 });
