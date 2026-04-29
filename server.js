@@ -6,7 +6,38 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
+// ====================== NEW: Free-form doctor Q&A ======================
+app.post("/ai/ask-doctor", (req, res) => {
+  const { question = "", context = {} } = req.body;
+  const q = question.toLowerCase();
 
+  audit("FREE_QUESTION", { question, context: context.symptoms || "none" });
+
+  // Smart keyword-based responses (you can expand this easily)
+  if (q.includes("arthritis") || q.includes("joint pain") || q.includes("osteoarthritis")) {
+    return res.json({
+      response: `For arthritis, first-line treatments usually include:\n• Regular low-impact exercise and physiotherapy\n• Paracetamol or topical anti-inflammatories\n• Weight management if applicable\n• In moderate-severe cases: oral NSAIDs, intra-articular steroid injections, or referral to rheumatology.\n\nAlways check for contraindications (e.g. kidney issues, stomach ulcers). Would you like me to explain any specific option?`,
+      safety: SAFETY_NOTICE
+    });
+  }
+
+  if (q.includes("treatment") && q.includes("best")) {
+    return res.json({
+      response: `The "best" treatment always depends on the exact diagnosis, severity, patient age, comorbidities and preferences. I can give general evidence-based guidance but a clinician must personalise it. What condition are you asking about?`,
+      safety: SAFETY_NOTICE
+    });
+  }
+
+  // Fallback – use existing classification logic
+  const combined = `${context.symptoms || ""} ${question}`;
+  const type = classify(combined);
+  const assessment = buildAssessment(context.symptoms || question, []);
+
+  res.json({
+    response: `${assessment.overall_assessment}\n\n${assessment.advice}\n\n${SAFETY_NOTICE}`,
+    safety: SAFETY_NOTICE
+  });
+});
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(process.cwd(), "public")));
