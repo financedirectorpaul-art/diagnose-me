@@ -64,29 +64,108 @@ app.get('/gdpr/export', (req, res) => {
   res.json({ controller: "DOCTORPD", records: auditLogs });
 });
 
-// ================= AI =================
+// ================= CLINICAL AI =================
 
 app.post('/ai/personal-check', (req, res) => {
-  res.json({
-    follow_up_questions: req.body.stage === "initial"
-      ? ["Duration of symptoms?", "Any fever?", "Any recent injury?"]
-      : [],
+  const input = (req.body.symptoms || "").toLowerCase();
+
+  let response = {
+    follow_up_questions: [],
     red_flags: [],
-    triage_score: 75,
+    triage_score: 50,
     urgency: "Moderate",
-    conditions: [
-      {
-        name: "Musculoskeletal issue",
-        likelihood: "High",
-        reason: "Symptoms suggest a non-critical musculoskeletal condition"
+    conditions: [],
+    overall_assessment: "",
+    icd: {},
+    cpt: "99213",
+    denial_risk: "Low",
+    revenue_prompts: [],
+    funding: { baseline: 1500, potential: 2200, uplift: 700 }
+  };
+
+  // ================= PNEUMONIA =================
+  if (input.includes("pneumonia")) {
+    response = {
+      ...response,
+      triage_score: 85,
+      urgency: "High",
+      conditions: [
+        {
+          name: "Pneumonia",
+          likelihood: "High",
+          reason: "Direct symptom input"
+        }
+      ],
+      overall_assessment:
+        "Likely pneumonia. Requires clinical confirmation, chest imaging, and assessment of oxygenation.",
+      icd: {
+        code: "J18.9",
+        description: "Pneumonia, unspecified organism",
+        confidence: 90
+      },
+      cpt: "99223",
+      denial_risk: "Moderate",
+      follow_up_questions: [
+        "Is there shortness of breath?",
+        "Any fever or chills?",
+        "Oxygen saturation?",
+        "Any chest pain?",
+        "Duration of symptoms?"
+      ],
+      revenue_prompts: [
+        { message: "Document oxygen requirement", value: 1800 },
+        { message: "Clarify severity (hypoxia/sepsis)", value: 2500 }
+      ],
+      funding: { baseline: 4000, potential: 6500, uplift: 2500 }
+    };
+  }
+
+  // ================= FRACTURE =================
+  else if (input.includes("fracture") || input.includes("broken")) {
+    response = {
+      ...response,
+      triage_score: 90,
+      urgency: "High",
+      conditions: [
+        { name: "Fracture", likelihood: "High", reason: "Trauma input" }
+      ],
+      overall_assessment:
+        "Suspected fracture. Requires urgent imaging and immobilisation.",
+      icd: {
+        code: "S82.90",
+        description: "Fracture of lower limb",
+        confidence: 85
+      },
+      cpt: "99223",
+      denial_risk: "Low",
+      follow_up_questions: [
+        "Can the patient bear weight?",
+        "Is there deformity?",
+        "Any numbness or tingling?"
+      ]
+    };
+  }
+
+  // ================= DEFAULT =================
+  else {
+    response = {
+      ...response,
+      triage_score: 60,
+      urgency: "Moderate",
+      conditions: [
+        { name: "General condition", likelihood: "Moderate", reason: "Limited input" }
+      ],
+      overall_assessment:
+        "Further clinical information required.",
+      icd: {
+        code: "R69",
+        description: "Illness, unspecified",
+        confidence: 50
       }
-    ],
-    overall_assessment: "Stable. Continue monitoring and conservative management.",
-    revenue_prompts: [
-      { message: "Add detailed examination findings", value: 420 }
-    ],
-    funding: { baseline: 1450, potential: 2100, uplift: 650 }
-  });
+    };
+  }
+
+  res.json(response);
 });
 
 // ================= DIAGNOSTICS =================
@@ -95,24 +174,14 @@ app.post('/ai/diagnostics-assist', (req, res) => {
   const { description } = req.body;
 
   res.json({
-    image_assessment: description
-      ? `Assessment based on description: ${description}`
-      : "No description provided.",
+    image_assessment: description || "No description provided",
     triage: { score: 68, urgency: "Moderate" },
     possible_conditions: [
-      {
-        name: "Soft tissue injury",
-        likelihood: "High",
-        reason: "Common presentation based on description"
-      }
+      { name: "Soft tissue injury", likelihood: "High", reason: "Likely cause" }
     ],
     recommended_diagnostics: {
       imaging: [
-        {
-          test: "X-ray",
-          reason: "Rule out fracture",
-          urgency: "Routine"
-        }
+        { test: "X-ray", reason: "Rule out fracture", urgency: "Routine" }
       ],
       pathology: []
     }
