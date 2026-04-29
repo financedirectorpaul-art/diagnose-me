@@ -1,5 +1,4 @@
 import express from 'express';
-import multer from 'multer';
 import cors from 'cors';
 import path from 'path';
 import Database from 'better-sqlite3';
@@ -14,7 +13,6 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(process.cwd(), 'public')));
 
-const upload = multer({ storage: multer.memoryStorage() });
 const db = new Database('doctorpd.db');
 
 // ================= DATABASE =================
@@ -116,23 +114,28 @@ app.post('/ai/personal-check', (req, res) => {
   });
 });
 
-// ================= DIAGNOSTICS =================
+// ================= DIAGNOSTICS (FIXED) =================
 
-app.post('/ai/diagnostics-assist', upload.single('image'), (req, res) => {
+app.post('/ai/diagnostics-assist', (req, res) => {
+  // Accepts JSON instead of file upload
+  const { description } = req.body;
+
   res.json({
-    image_assessment: "Mild soft tissue swelling, no obvious fracture.",
+    image_assessment: description
+      ? `Assessment based on description: ${description}`
+      : "No description provided.",
     triage: { score: 68, urgency: "Moderate" },
     possible_conditions: [
       {
-        name: "Ankle sprain",
+        name: "Soft tissue injury",
         likelihood: "High",
-        reason: "Inversion injury"
+        reason: "Based on provided description"
       }
     ],
     recommended_diagnostics: {
       imaging: [
         {
-          test: "X-ray Ankle (3 views)",
+          test: "X-ray (relevant area)",
           reason: "Rule out fracture",
           urgency: "Routine"
         }
