@@ -1,4 +1,4 @@
-// server.js - DOCTORPD Ultimate Backend (CommonJS Version - Render Compatible)
+// server.js - DOCTORPD Ultimate Backend (CommonJS Version)
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -77,38 +77,7 @@ app.post('/auth/login', (req, res) => {
   }
 });
 
-// ====================== GDPR ARTICLE 30 ======================
-app.get('/gdpr/processing-activities', (req, res) => {
-  const email = req.query.email;
-  const logs = db.prepare('SELECT * FROM audit_logs WHERE clinician_email = ? ORDER BY timestamp DESC').all(email);
-  res.json(logs);
-});
-
-app.get('/gdpr/export', (req, res) => {
-  const email = req.query.email;
-  const logs = db.prepare('SELECT * FROM audit_logs WHERE clinician_email = ? ORDER BY timestamp DESC').all(email);
-  res.json({ controller: "DOCTORPD", dpo: "dpo@doctorpd.com", records: logs });
-});
-
-app.post('/gdpr/request-access', (req, res) => {
-  const { email, patientName } = req.body;
-  logGDPR(email, 'DATA_ACCESS_REQUEST', patientName, 'Consent', 'Subject access request', 'All personal data', '');
-  res.json({ success: true });
-});
-
-app.post('/gdpr/request-erasure', (req, res) => {
-  const { email, patientName } = req.body;
-  logGDPR(email, 'DATA_ERASURE_REQUEST', patientName, 'Consent', 'Right to erasure', 'All personal data', '');
-  res.json({ success: true });
-});
-
-app.post('/gdpr/withdraw-consent', (req, res) => {
-  const { email, patientName } = req.body;
-  logGDPR(email, 'CONSENT_WITHDRAWN', patientName, 'Consent', 'Consent withdrawal', 'Consent record', '');
-  res.json({ success: true });
-});
-
-// ====================== AI ENDPOINTS (Context-Aware) ======================
+// ====================== AI ENDPOINTS ======================
 app.post('/ai/personal-check', (req, res) => {
   const symptoms = (req.body.symptoms || "").toLowerCase();
   if (symptoms.includes("pneumonia") || symptoms.includes("chest") || symptoms.includes("cough") || symptoms.includes("breath")) {
