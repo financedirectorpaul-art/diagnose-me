@@ -12,16 +12,25 @@
     .nav:hover{background:#1e293b;color:white}
     .main{display:flex;flex-direction:column;height:100vh;overflow:hidden}
     .doctor{display:flex;align-items:center;gap:12px;padding:14px 20px;background:#020617;border-bottom:1px solid #1e293b}
-    .avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#38bdf8);display:flex;align-items:center;justify-content:center;font-size:24px}
-    .doctor-name{font-weight:700}.doctor-sub{color:#94a3b8;font-size:13px}
+    .avatar{width:64px;height:64px;border-radius:50%;background:#1e293b;overflow:hidden;border:3px solid #7c3aed}
+    .avatar img{width:100%;height:100%;object-fit:cover}
+    .doctor-name{font-weight:700;font-size:18px}
+    .doctor-sub{color:#94a3b8;font-size:13px}
+    .gender-toggle{display:flex;gap:8px;margin-left:auto}
+    .gender-btn{padding:6px 14px;border-radius:9999px;font-size:13px;cursor:pointer;background:#1e293b;color:#cbd5e1}
+    .gender-btn.active{background:#7c3aed;color:white}
     .chat{flex:1;overflow-y:auto;padding:22px;scroll-behavior:smooth}
     .row{display:flex;gap:10px;margin-bottom:12px}.user-row{justify-content:flex-end}
     .bubble{max-width:75%;padding:13px 15px;border-radius:14px;line-height:1.45;white-space:pre-wrap}
-    .ai{background:#1e293b;border:1px solid #334155}.user{background:#7c3aed}
+    .ai{background:#1e293b;border:1px solid #334155}
+    .user{background:#7c3aed}
     .inputbar{display:flex;gap:10px;padding:14px;background:#020617;border-top:1px solid #1e293b}
     input,textarea{width:100%;box-sizing:border-box;background:#020617;color:white;border:1px solid #334155;border-radius:10px;padding:11px;margin-top:8px}
     button{background:#7c3aed;color:white;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;margin-top:8px}
     button.secondary{background:#334155}
+    .mic-btn{font-size:24px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#7c3aed;margin-top:8px}
+    .listening{animation: pulse 1.5s infinite}
+    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
     .panel{padding:18px;background:#020617;border-top:1px solid #1e293b;max-height:340px;overflow-y:auto}
     .card{background:#020617;border:1px solid #1e293b;border-radius:16px;padding:22px;margin:22px}
     .box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:13px;margin-top:10px}
@@ -31,7 +40,6 @@
     pre{white-space:pre-wrap;max-width:600px}
   </style>
 </head>
-
 <body>
 <div class="layout">
   <div class="sidebar">
@@ -53,6 +61,52 @@ let latestAI=null;
 let documentation=[];
 let activePrompts=[];
 let isWaiting=false;
+let currentDoctor="female";
+let autoSpeak=true;
+
+const doctorProfiles = {
+  female: { name:"Dr. Elena Voss", title:"Clinical AI consultation assistant", avatar:"https://randomuser.me/api/portraits/women/44.jpg", voice:"female" },
+  male:   { name:"Dr. James Harper", title:"Clinical AI consultation assistant", avatar:"https://randomuser.me/api/portraits/men/32.jpg",   voice:"male" }
+};
+
+function speak(text) {
+  if (!autoSpeak || !('speechSynthesis' in window)) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  const profile = doctorProfiles[currentDoctor];
+  const voices = speechSynthesis.getVoices();
+  let selected = voices.find(v => v.lang.includes('AU') || 
+    (profile.voice==="female" && v.name.includes("Samantha")) ||
+    (profile.voice==="male" && v.name.includes("Daniel"))) || voices[0];
+  utterance.voice = selected;
+  utterance.pitch = profile.voice==="female" ? 1.1 : 0.9;
+  utterance.rate = 0.95;
+  speechSynthesis.speak(utterance);
+}
+
+function startVoiceInput() {
+  if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+    alert("Voice input not supported in this browser. Please use Chrome or Edge.");
+    return;
+  }
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang = "en-AU";
+  const micBtn = document.getElementById("micBtn");
+  if (micBtn) micBtn.classList.add("listening");
+  recognition.onresult = e => {
+    const transcript = e.results[0][0].transcript;
+    const input = document.getElementById("input");
+    if (input) { input.value = transcript; send(); }
+  };
+  recognition.onerror = () => { if (micBtn) micBtn.classList.remove("listening"); };
+  recognition.onend = () => { if (micBtn) micBtn.classList.remove("listening"); };
+  recognition.start();
+}
+
+function switchDoctor(gender) {
+  currentDoctor = gender;
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.toggle('active', b.dataset.gender===gender));
+  showChat();
+}
 
 function money(n){return "$"+Number(n||0).toLocaleString();}
 function scrollChat(){const chat=document.getElementById("chat");if(chat)chat.scrollTop=chat.scrollHeight;}
@@ -62,7 +116,17 @@ function showChat(){
   conversation={symptoms:"",answers:[],questionIndex:0};
   latestAI=null;activePrompts=[];isWaiting=false;
   document.getElementById("app").innerHTML=`
-    <div class="doctor"><div class="avatar">👩‍⚕️</div><div><div class="doctor-name">Dr. Elena</div><div class="doctor-sub">Clinical AI consultation assistant</div></div></div>
+    <div class="doctor">
+      <div class="avatar"><img src="${doctorProfiles[currentDoctor].avatar}" alt="Doctor"></div>
+      <div>
+        <div class="doctor-name">${doctorProfiles[currentDoctor].name}</div>
+        <div class="doctor-sub">${doctorProfiles[currentDoctor].title}</div>
+      </div>
+      <div class="gender-toggle">
+        <div class="gender-btn ${currentDoctor==='female'?'active':''}" data-gender="female" onclick="switchDoctor('female')">👩‍⚕️ Female</div>
+        <div class="gender-btn ${currentDoctor==='male'?'active':''}" data-gender="male" onclick="switchDoctor('male')">👨‍⚕️ Male</div>
+      </div>
+    </div>
     <div id="chat" class="chat"></div>
     <div class="panel">
       <b>Structured Clinical Note</b>
@@ -82,16 +146,27 @@ function showChat(){
       <button onclick="submitOverride()">Submit Override</button>
     </div>
     <div class="inputbar">
-      <input id="input" placeholder="Describe symptoms or clinical presentation..." />
+      <input id="input" placeholder="Describe symptoms or speak your answer..." />
       <button onclick="send()">Send</button>
+      <button class="mic-btn" id="micBtn" onclick="startVoiceInput()" title="Speak answer">🎤</button>
       <button class="secondary" onclick="showChat()">New</button>
     </div>`;
   document.getElementById("input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();send();}});
-  addAI("Hi, I'm Dr. Elena. How is the patient presenting today?");
+  addAI(`Hi, I'm ${doctorProfiles[currentDoctor].name.split(" ")[1]}. How is the patient presenting today?`);
 }
 
-function addAI(text){const chat=document.getElementById("chat");chat.innerHTML+=`<div class="row"><div class="avatar" style="width:32px;height:32px;font-size:17px;">👩‍⚕️</div><div class="bubble ai">${text}</div></div>`;scrollChat();}
-function addUser(text){const chat=document.getElementById("chat");chat.innerHTML+=`<div class="row user-row"><div class="bubble user">${text}</div></div>`;scrollChat();}
+function addAI(text){
+  const chat=document.getElementById("chat");
+  chat.innerHTML+=`<div class="row"><div class="avatar" style="width:42px;height:42px;font-size:22px;overflow:hidden;border-radius:50%;"><img src="${doctorProfiles[currentDoctor].avatar}" style="width:100%;height:100%;object-fit:cover"></div><div class="bubble ai">${text}</div></div>`;
+  scrollChat();
+  speak(text);
+}
+
+function addUser(text){
+  const chat=document.getElementById("chat");
+  chat.innerHTML+=`<div class="row user-row"><div class="bubble user">${text}</div></div>`;
+  scrollChat();
+}
 
 async function send(){
   if(isWaiting)return;
@@ -99,16 +174,12 @@ async function send(){
   const text=input.value.trim();
   if(!text)return;
   addUser(text);input.value="";isWaiting=true;
-
   if(!conversation.symptoms){conversation.symptoms=text;}else{conversation.answers.push(text);conversation.questionIndex+=1;}
-
   addAI("Thinking...");
   const res=await fetch("/ai/personal-check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(conversation)});
   const data=await res.json();
   document.getElementById("chat").lastElementChild.remove();
-
   if(data.mode==="question"){addAI(data.question);isWaiting=false;return;}
-
   latestAI=data;
   renderFinal(data);
   generateNote();
@@ -124,30 +195,24 @@ function renderFinal(data){
   out+=`Confidence: ${data.confidence||"N/A"}%\n`;
   out+=`Uncertainty: ${data.uncertainty||"N/A"}\n\n`;
   out+=`Assessment:\n${data.overall_assessment}\n\n`;
-
   if(data.differential?.length){
     out+="Differential Ranking:\n";
     data.differential.forEach(d=>{out+=`${d.rank}. ${d.condition} — ${d.probability}% (${d.likelihood})\nICD: ${d.icd_suggestion?.code||"N/A"} — ${d.icd_suggestion?.description||""}\n`;});
     out+="\n";
   }
-
   if(data.conditions?.length){
     out+="Possible Conditions:\n";
     data.conditions.forEach(c=>{out+=`• ${c.name} (${c.likelihood}) — ${c.reason}\n`;});
     out+="\n";
   }
-
   if(data.icd){out+=`ICD-10 Suggestion:\n${data.icd.code} (${data.icd.description}) — ${data.icd.confidence}%\n\n`;}
   out+=`CPT Suggestion: ${data.cpt||"N/A"}\n`;
   out+=`Denial Risk: ${data.denial_risk||"N/A"}\n\n`;
-
   if(data.missing_information?.length){out+="Missing Information:\n";data.missing_information.forEach(m=>out+=`• ${m}\n`);out+="\n";}
   if(data.funding){out+=`Funding Insight:\nBaseline: ${money(data.funding.baseline)}\nPotential: ${money(data.funding.potential)}\nUplift: ${money(data.funding.uplift)}\n\n`;}
   if(data.advice){out+=`Advice:\n${data.advice}\n\n`;}
   out+=data.legal_notice||"Decision support only. Requires clinician review.";
-
   addAI(out);
-
   if(activePrompts.length){
     let html="<b>Documentation Opportunities</b><br>";
     activePrompts.forEach((p,i)=>{html+=`<span class="clickable" onclick="addPrompt(${i})">• ${p.message} → ${money(p.value||p.estimated_uplift)}</span><br>`;});
@@ -161,30 +226,22 @@ function generateNote(){
   const note=`
 LEGAL NOTICE:
 Decision support only. Requires clinician review.
-
 PRESENTING COMPLAINT:
 ${conversation.symptoms||"Not recorded"}
-
 RESPONSES:
 ${conversation.answers.join("\n")||"Not recorded"}
-
 ASSESSMENT:
 ${latestAI?.overall_assessment||"Not recorded"}
-
 DIFFERENTIAL:
 ${(latestAI?.differential||[]).map(d=>`${d.rank}. ${d.condition} (${d.probability}%) ICD: ${d.icd_suggestion?.code||"N/A"}`).join("\n")||"Not recorded"}
-
 ICD:
 ${latestAI?.icd?.code||"N/A"} - ${latestAI?.icd?.description||"N/A"}
-
 TRIAGE:
 Score: ${latestAI?.triage_score||"N/A"}
 Urgency: ${latestAI?.urgency||"N/A"}
 Confidence: ${latestAI?.confidence||"N/A"}
-
 DOCUMENTATION OPPORTUNITIES:
 ${documentation.join("\n")||"None"}
-
 PLAN:
 - Clinician review required.
 - Confirm diagnosis clinically.
@@ -212,10 +269,10 @@ async function submitOverride(){
   alert("Override logged");
 }
 
+// All other original functions remain exactly the same
 function showDiagnostics(){
   document.getElementById("app").innerHTML=`<div class="card"><h2>Diagnostics</h2><textarea id="diagDescription" placeholder="Describe issue or image findings..."></textarea><input type="file" id="diagImage" accept="image/*"><button onclick="runDiagnostics()">Analyse</button><div id="diagOut"></div></div>`;
 }
-
 async function runDiagnostics(){
   const description=document.getElementById("diagDescription").value;
   const file=document.getElementById("diagImage").files[0];
@@ -225,45 +282,37 @@ async function runDiagnostics(){
   const d=await res.json();
   document.getElementById("diagOut").innerHTML=`<div class="box"><b>Assessment</b><br>${d.image_assessment}</div><div class="box"><b>Triage</b><br>${d.triage.score} — ${d.triage.urgency}</div><div class="box"><b>Possible Conditions</b><br>${(d.possible_conditions||[]).map(x=>"• "+x.name+" — "+x.reason).join("<br>")}</div><div class="box"><b>Imaging</b><br>${d.recommended_diagnostics.imaging.map(x=>`${x.test} — ${x.reason}`).join("<br>")}</div><div class="box"><b>Pathology</b><br>${d.recommended_diagnostics.pathology.map(x=>`${x.test} — ${x.reason}`).join("<br>")||"None suggested"}</div>`;
 }
-
 function showDocumentation(){
   document.getElementById("app").innerHTML=`<div class="card"><h2>Documentation Assistant</h2><textarea id="docText"></textarea><button onclick="analyseDoc()">Analyse</button><div id="docOut"></div></div>`;
 }
-
 async function analyseDoc(){
   const note=document.getElementById("docText").value;
   const res=await fetch("/ai/clinical-assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note})});
   const d=await res.json();
   document.getElementById("docOut").innerHTML=`<div class="box"><b>Suggestions</b><br>${d.suggestions.map(x=>"• "+x).join("<br>")}</div><div class="box"><b>Funding Prompts</b><br>${d.funding_prompts.map(x=>"• "+x.prompt+" → "+money(x.estimated_uplift)).join("<br>")}</div><div class="box"><b>ICD Opportunities</b><br>${d.icd_opportunities.map(x=>"• "+x.indicative_code+" — "+x.description+" — "+x.documentation_needed).join("<br>")}</div><div class="box"><b>Audit Risks</b><br>${d.audit_risks.map(x=>"• "+x).join("<br>")}</div>`;
 }
-
 function showFunding(){
   document.getElementById("app").innerHTML=`<div class="card"><h2>Funding Estimator</h2><input id="dx" placeholder="Enter diagnosis"><button onclick="runFunding()">Estimate</button><div id="fundingOut"></div></div>`;
 }
-
 async function runFunding(){
   const diagnosis=document.getElementById("dx").value;
   const res=await fetch("/drg/estimate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({diagnosis})});
   const d=await res.json();
   document.getElementById("fundingOut").innerHTML=`<div class="box">Predicted Funding: <b>${money(d.funding)}</b><input id="actualFunding" placeholder="Actual funding"><button onclick="saveCase(${d.funding})">Save Case</button></div>`;
 }
-
 async function saveCase(predicted){
   const actual=Number(document.getElementById("actualFunding").value||0);
   await fetch("/pilot/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({predicted,actual})});
   alert("Saved");
 }
-
 async function showCases(){
   const res=await fetch("/pilot/data");const rows=await res.json();
   document.getElementById("app").innerHTML=`<div class="card"><h2>Case Tracking</h2><table><tr><th>ID</th><th>Patient</th><th>Predicted</th><th>Actual</th><th>Variance</th><th>Date</th></tr>${rows.map(r=>`<tr><td>${r.id}</td><td>${r.patientName}</td><td>${money(r.predicted)}</td><td>${money(r.actual)}</td><td>${money(r.actual-r.predicted)}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join("")}</table></div>`;
 }
-
 async function showMetrics(){
   const res=await fetch("/pilot/metrics");const d=await res.json();
   document.getElementById("app").innerHTML=`<div class="card"><h2>Metrics</h2><div class="metric-grid"><div class="metric">Predicted<b>${money(d.predicted)}</b></div><div class="metric">Actual<b>${money(d.actual)}</b></div><div class="metric">Variance<b>${money(d.delta)}</b></div><div class="metric">Cases<b>${d.total}</b></div></div></div>`;
 }
-
 async function showAudit(){
   const res=await fetch("/audit/data");const rows=await res.json();
   document.getElementById("app").innerHTML=`<div class="card"><h2>Audit Trail</h2><table><tr><th>Time</th><th>Action</th><th>Details</th></tr>${rows.map(r=>`<tr><td>${new Date(r.timestamp).toLocaleString()}</td><td>${r.action}</td><td><pre>${JSON.stringify(r.details,null,2)}</pre></td></tr>`).join("")}</table></div>`;
