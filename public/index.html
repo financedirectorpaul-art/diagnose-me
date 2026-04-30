@@ -69,7 +69,7 @@ let isWaiting=false;
 let currentDoctor="female";
 let chatMode="guided";
 
-// ==================== STABLE VOICE ENGINE ====================
+// Stable Voice Engine
 let voicesLoaded = false;
 let femaleVoice = null;
 let maleVoice = null;
@@ -78,12 +78,9 @@ function loadVoices() {
   const all = speechSynthesis.getVoices();
   if (all.length === 0) return;
   voicesLoaded = true;
-  femaleVoice = all.find(v => v.lang === "en-AU" && /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) ||
-                all.find(v => /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) || all[0];
-  maleVoice = all.find(v => v.lang === "en-AU" && /male|james|david|daniel|oliver|henry/i.test(v.name)) ||
-              all.find(v => /male|james|david|daniel|oliver|henry/i.test(v.name)) || all[1] || all[0];
+  femaleVoice = all.find(v => v.lang === "en-AU" && /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) || all.find(v => /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) || all[0];
+  maleVoice = all.find(v => v.lang === "en-AU" && /male|james|david|daniel|oliver|henry/i.test(v.name)) || all.find(v => /male|james|david|daniel|oliver|henry/i.test(v.name)) || all[1] || all[0];
 }
-
 if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = loadVoices;
   loadVoices();
@@ -232,7 +229,7 @@ async function send(){
   isWaiting=false;
 }
 
-// ==================== ALL ORIGINAL FUNCTIONS (unchanged) ====================
+// ==================== ORIGINAL FUNCTIONS (exactly as you had them) ====================
 function renderFinal(data){
   activePrompts=data.revenue_prompts||[];
   let out="";
