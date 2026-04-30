@@ -24,9 +24,11 @@
     .gender-btn.active{background:#7c3aed;color:white}
     .chat{flex:1;overflow-y:auto;padding:22px;scroll-behavior:smooth}
     .row{display:flex;gap:10px;margin-bottom:12px}.user-row{justify-content:flex-end}
-    .bubble{max-width:75%;padding:13px 15px;border-radius:14px;line-height:1.45;white-space:pre-wrap}
+    .bubble{max-width:75%;padding:13px 15px;border-radius:14px;line-height:1.45;white-space:pre-wrap;position:relative}
     .ai{background:#1e293b;border:1px solid #334155}
     .user{background:#7c3aed}
+    .listen-btn{position:absolute;right:10px;bottom:10px;font-size:18px;cursor:pointer;opacity:0.6}
+    .listen-btn:hover{opacity:1}
     .inputbar{display:flex;gap:10px;padding:14px;background:#020617;border-top:1px solid #1e293b}
     input,textarea{width:100%;box-sizing:border-box;background:#020617;color:white;border:1px solid #334155;border-radius:10px;padding:11px;margin-top:8px}
     button{background:#7c3aed;color:white;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;margin-top:8px}
@@ -67,51 +69,63 @@ let isWaiting=false;
 let currentDoctor="female";
 let chatMode="guided";
 
-// Voice system
-let voices = [];
-let voiceReady = false;
+// ==================== FIXED VOICE ENGINE ====================
+let voicesLoaded = false;
+let femaleVoice = null;
+let maleVoice = null;
 
 function loadVoices() {
-  voices = speechSynthesis.getVoices();
-  if (voices.length > 0) voiceReady = true;
+  const allVoices = speechSynthesis.getVoices();
+  if (allVoices.length === 0) return;
+
+  voicesLoaded = true;
+
+  // Try Australian female first, then any female-sounding
+  femaleVoice = allVoices.find(v => v.lang === "en-AU" && /female|karen|tessa|alice|samantha|emma|olivia|zira/i.test(v.name)) ||
+                allVoices.find(v => /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) ||
+                allVoices[0];
+
+  // Try Australian male first, then any male-sounding
+  maleVoice = allVoices.find(v => v.lang === "en-AU" && /male|james|david|daniel|oliver|henry/i.test(v.name)) ||
+              allVoices.find(v => /male|james|david|daniel|oliver|henry/i.test(v.name)) ||
+              allVoices[1] || allVoices[0];
+
+  console.log("✅ Voices loaded → Female:", femaleVoice?.name, "Male:", maleVoice?.name);
 }
 
-// Load voices immediately and listen for update
 if ('speechSynthesis' in window) {
   speechSynthesis.onvoiceschanged = loadVoices;
-  loadVoices(); // some browsers need this call
+  loadVoices();                    // immediate call
+  // Some browsers need a second call
+  setTimeout(loadVoices, 800);
+}
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  const profile = doctorProfiles[currentDoctor];
+
+  utterance.voice = profile.voice === "female" ? femaleVoice : maleVoice;
+  utterance.pitch = profile.voice === "female" ? 1.1 : 0.95;
+  utterance.rate = 0.97;
+
+  // If voices not ready yet, wait and retry once
+  if (!voicesLoaded) {
+    setTimeout(() => speak(text), 600);
+    return;
+  }
+
+  speechSynthesis.speak(utterance);
 }
 
 const doctorProfiles = {
   female: { name:"Dr. Elena Voss", title:"Clinical AI consultation assistant", avatar:"https://randomuser.me/api/portraits/women/44.jpg", voice:"female" },
-  male:   { name:"Dr. James Harper", title:"Clinical AI consultation assistant", avatar:"https://randomuser.me/api/portraits/men/32.jpg",   voice:"male" }
+  male:   { name:"Dr. James Harper", title:"Clinical AI consultation assistant", avatar:"https://randomuser.me/api/portraits/men/32.jpg", voice:"male" }
 };
 
-function speak(text) {
-  if (!('speechSynthesis' in window) || !voiceReady) {
-    console.warn("Voices not ready yet");
-    return;
-  }
-  const utterance = new SpeechSynthesisUtterance(text);
-  const profile = doctorProfiles[currentDoctor];
-
-  // Prefer Australian English voices first
-  let selected = voices.find(v => v.lang === "en-AU" || v.lang === "en-AU") ||
-                 voices.find(v => 
-                   (profile.voice === "female" && 
-                    (/female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name) || v.name.toLowerCase().includes("zira"))) ||
-                   (profile.voice === "male" && 
-                    (/male|james|david|daniel|oliver|henry/i.test(v.name) || v.name.toLowerCase().includes("david")))
-                 ) ||
-                 voices[0]; // final fallback
-
-  utterance.voice = selected;
-  utterance.pitch = profile.voice === "female" ? 1.1 : 0.95;
-  utterance.rate = 0.97;
-  speechSynthesis.speak(utterance);
-}
-
-function startVoiceInput() {
+// ==================== REST OF APP ====================
+function startVoiceInput() { /* unchanged from previous version */ 
   if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
     alert("Voice input not supported in this browser. Please use Chrome or Edge.");
     return;
@@ -195,7 +209,14 @@ function showChat(){
 
 function addAI(text){
   const chat=document.getElementById("chat");
-  chat.innerHTML+=`<div class="row"><div class="avatar" style="width:42px;height:42px;overflow:hidden;border-radius:50%;"><img src="${doctorProfiles[currentDoctor].avatar}" style="width:100%;height:100%;object-fit:cover"></div><div class="bubble ai">${text}</div></div>`;
+  const id = "msg-" + Date.now();
+  chat.innerHTML += `
+    <div class="row" id="${id}">
+      <div class="avatar" style="width:42px;height:42px;overflow:hidden;border-radius:50%;">
+        <img src="${doctorProfiles[currentDoctor].avatar}" style="width:100%;height:100%;object-fit:cover">
+      </div>
+      <div class="bubble ai">${text}<span class="listen-btn" onclick="speak('${text.replace(/'/g, "\\'")}')">🔊</span></div>
+    </div>`;
   scrollChat();
   speak(text);
 }
@@ -205,9 +226,6 @@ function addUser(text){
   chat.innerHTML+=`<div class="row user-row"><div class="bubble user">${text}</div></div>`;
   scrollChat();
 }
-
-// === send(), renderFinal(), generateNote(), generateFHIR(), submitOverride() and all other functions are unchanged from previous version ===
-// (They are exactly the same as the last full file I gave you)
 
 async function send(){
   if(isWaiting) return;
@@ -224,7 +242,7 @@ async function send(){
     res = await fetch("/ai/ask-doctor", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question: text, context: latestAI || conversation})});
     data = await res.json();
     document.getElementById("chat").lastElementChild.remove();
-    addAI(data.response || "I'm sorry, I couldn't process that question.");
+    addAI(data.response || "I'm sorry, I couldn't process that question right now.");
   } else {
     if(!conversation.symptoms){conversation.symptoms=text;}else{conversation.answers.push(text);conversation.questionIndex+=1;}
     res=await fetch("/ai/personal-check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(conversation)});
@@ -239,7 +257,8 @@ async function send(){
   isWaiting=false;
 }
 
-// Paste your original renderFinal, generateNote, generateFHIR, submitOverride, showDiagnostics, etc. here (same as last version)
+// === ALL YOUR ORIGINAL FUNCTIONS (renderFinal, generateNote, generateFHIR, submitOverride, showDiagnostics, etc.) go here exactly as before ===
+// (copy them from the previous full version I gave you)
 
 showChat();
 </script>
