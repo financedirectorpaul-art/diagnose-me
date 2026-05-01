@@ -137,6 +137,7 @@ async function generateMultiAIAssessment(symptoms, answers) {
   };
 }
 
+// ==================== GUIDED TRIAGE ====================
 app.post("/ai/personal-check", async (req, res) => {
   const { symptoms = "", answers = [], questionIndex = 0 } = req.body;
   const combined = `${symptoms} ${answers.join(" ")}`;
@@ -168,21 +169,41 @@ app.post("/ai/personal-check", async (req, res) => {
   res.json(finalAssessment);
 });
 
+// ==================== FIXED FREE CHAT (now handles general questions) ====================
 app.post("/ai/ask-doctor", async (req, res) => {
   const { question = "", context = {}, imageBase64 = null } = req.body;
-  audit("FREE_QUESTION_MULTI_AI", { question });
-  const [openai, gemini] = await Promise.all([
-    callOpenAIForAssessment(context.symptoms || "", context.answers || []),
-    callGeminiForAssessment(context.symptoms || "", context.answers || [])
-  ]);
-  const results = [openai, gemini].filter(Boolean);
-  let response = results.length > 0 ? results[0].overall_assessment || results[0].advice || "I have reviewed your question." : "Sorry, the AI service is temporarily unavailable.";
-  if (imageBase64) response += "\n\n(Image analysis included in the above assessment.)";
+  audit("FREE_QUESTION", { question });
+
+  const keyOpenAI = process.env.OPENAI_API_KEY;
+  const keyGemini = process.env.GEMINI_API_KEY;
+
+  let response = "Sorry, the AI service is temporarily unavailable.";
+
+  try {
+    if (keyOpenAI) {
+      const resOpenAI = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${keyOpenAI}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are a knowledgeable, compassionate Australian doctor. Answer general medical questions accurately and clearly. Include safety notice at the end. Be helpful and evidence-based." },
+            { role: "user", content: `Context: ${context.symptoms || ""} ${context.answers ? context.answers.join(" ") : ""}\n\nQuestion: ${question}` }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        })
+      });
+      const data = await resOpenAI.json();
+      response = data.choices[0].message.content;
+    }
+  } catch (e) {}
+
   response += `\n\n${SAFETY_NOTICE}`;
   res.json({ response });
 });
 
-// Original routes (unchanged)
+// ==================== ORIGINAL ROUTES ====================
 app.post("/ai/diagnostics-assist", (req, res) => {
   const { description = "", imageBase64 = "" } = req.body;
   const type = classify(description);
@@ -258,4 +279,4 @@ app.get("/health", (req, res) => res.json({ status: "healthy", service: "DOCTORP
 app.get("*", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`✅ DOCTORPD running on Render — OpenAI + Gemini + Image Support`));
+app.listen(PORT, () => console.log(`✅ DOCTORPD running — OpenAI + Gemini`));
