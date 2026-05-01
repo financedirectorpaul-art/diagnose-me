@@ -79,8 +79,8 @@ function classify(text = "") {
   if (/(fracture|broken bone|broken|fall|injury|trauma|twisted|sprain|deformed|open wound|cannot weight bear|can't weight bear|broken arm|broken leg)/.test(t)) return "trauma";
   if (/(knee|ankle|hip|shoulder|elbow|wrist|joint|muscle|ache|stiff|swelling|locked|strain|sprain|back pain|neck pain)/.test(t)) return "musculoskeletal";
   if (/(depressed|anxious|panic|suicidal|kill myself|mental health|self harm)/.test(t)) return "mental_health";
-  if (/(stomach cramps|stomach pain|abdominal pain|cramps|belly ache)/.test(t)) return "general";
-  if (/(headache|head pain|migraine)/.test(t)) return "general";
+  if (/(stomach cramps|stomach pain|abdominal pain|cramps|belly ache|nausea|vomit)/.test(t)) return "general";
+  if (/(headache|head pain|migraine|dizzy|dizziness|vertigo|lightheaded)/.test(t)) return "general";
   return "general";
 }
 
@@ -120,7 +120,7 @@ function buildAssessment(symptoms, answers) {
   if (type === "musculoskeletal") {
     return { mode: "final", case_type: "musculoskeletal", triage_score: 45, urgency: "Low to Moderate", confidence: 76, uncertainty: "Confidence depends on trauma history, swelling, range of motion, laterality, pain score and functional limitation.", red_flags: [], differential: [{rank:1,condition:"Musculoskeletal joint pain",probability:50,likelihood:"high",icd_suggestion:{code:"M25.569",description:"Pain in knee, unspecified"}},{rank:2,condition:"Soft tissue injury",probability:30,likelihood:"moderate",icd_suggestion:{code:"S83.9",description:"Sprain and strain of unspecified parts of knee"}},{rank:3,condition:"Degenerative joint disease",probability:20,likelihood:"low",icd_suggestion:{code:"M17.9",description:"Gonarthrosis, unspecified"}}], conditions: [{name:"Musculoskeletal joint pain",likelihood:"High",reason:"Localised sore knee/joint pain presentation."},{name:"Soft tissue injury",likelihood:"Moderate",reason:"Possible if related to strain, twisting or overuse."},{name:"Degenerative joint disease",likelihood:"Low",reason:"Possible if chronic, recurrent or age-related."}], overall_assessment: "Likely musculoskeletal knee or joint pain. Further assessment should clarify onset, injury mechanism, swelling, range of motion, weight-bearing ability and severity.", icd: {code:"M25.569",description:"Pain in knee, unspecified",confidence:80}, cpt: "99213", denial_risk: "Low", missing_information: ["Laterality","Pain score","Swelling","Range of motion","Ability to bear weight","Functional impact"], advice: "Consider clinical review if pain is severe, persistent, worsening, associated with swelling, locking, instability, fever, inability to bear weight, or trauma.", revenue_prompts: [{message:"Document laterality",value:300},{message:"Document pain score and functional limitation",value:600},{message:"Document range of motion and weight-bearing status",value:700}], funding: {baseline:1400,potential:3000,uplift:1600}, legal_notice: SAFETY_NOTICE };
   }
-  return { mode: "final", case_type: "general", triage_score: 60, urgency: "Moderate", confidence: 45, uncertainty: "Insufficient clinical detail to provide a specific assessment.", red_flags: [], differential: [{rank:1,condition:"General clinical presentation",probability:100,likelihood:"moderate",icd_suggestion:{code:"R69",description:"Illness, unspecified"}}], conditions: [{name:"General clinical presentation",likelihood:"Moderate",reason:"Limited information provided."}], overall_assessment: "Further clinical information is required to refine the assessment.", icd: {code:"R69",description:"Illness, unspecified",confidence:50}, cpt: "99213", denial_risk: "Moderate", missing_information: ["Duration","Severity","Associated symptoms","Relevant history","Examination findings"], advice: "Provide more symptom detail and seek clinical review if symptoms are severe, worsening or concerning.", revenue_prompts: [{message:"Document symptom duration and severity",value:500},{message:"Document relevant comorbidities",value:700}], funding: {baseline:1500,potential:2300,uplift:800}, legal_notice: SAFETY_NOTICE };
+  return { mode: "final", case_type: "general", triage_score: 55, urgency: "Moderate", confidence: 60, uncertainty: "General symptom assessment", red_flags: [], differential: [{rank:1,condition:"General symptom presentation",probability:100,likelihood:"moderate",icd_suggestion:{code:"R69",description:"Illness, unspecified"}}], conditions: [{name:"General symptom presentation",likelihood:"Moderate",reason:"Common symptom input."}], overall_assessment: `Your reported symptom "${symptoms}" has been noted. Common causes can include dehydration, viral illness, stress, or migraine (for dizziness/headache) or gastrointestinal upset (for stomach cramps). Further details would help refine this.`, icd: {code:"R69",description:"Illness, unspecified",confidence:60}, cpt: "99213", denial_risk: "Low", missing_information: ["Duration","Severity","Associated symptoms"], advice: "Monitor symptoms and seek medical review if they worsen or persist. Call 000 if severe.", revenue_prompts: [], funding: {baseline:1500,potential:2300,uplift:800}, legal_notice: SAFETY_NOTICE };
 }
 
 async function callOpenAIForAssessment(symptoms, answers) {
@@ -169,10 +169,9 @@ async function generateMultiAIAssessment(symptoms, answers) {
   const [openai, gemini] = await Promise.all([callOpenAIForAssessment(symptoms, answers), callGeminiForAssessment(symptoms, answers)]);
   const results = [openai, gemini].filter(Boolean);
   if (results.length === 0) return buildAssessment(symptoms, answers);
-  const type = classify(`${symptoms} ${answers.join(" ")}`);
   return {
     mode: "final",
-    case_type: type,
+    case_type: classify(`${symptoms} ${answers.join(" ")}`),
     triage_score: Math.round(results.reduce((a, r) => a + (r.triage_score || 60), 0) / results.length),
     urgency: results.some(r => r.urgency === "EMERGENCY") ? "EMERGENCY" : results.some(r => r.urgency === "High") ? "High" : "Moderate",
     confidence: Math.round(results.reduce((a, r) => a + (r.confidence || 70), 0) / results.length),
@@ -221,13 +220,13 @@ app.post("/ai/personal-check", async (req, res) => {
   res.json(finalAssessment);
 });
 
-// ====================== FREE CHAT (now with strong fallback) ======================
+// ====================== FREE CHAT (strong fallback) ======================
 app.post("/ai/ask-doctor", async (req, res) => {
   const { question = "", context = {} } = req.body;
-  const symptoms = context.symptoms || question;
+  const symptoms = context.symptoms || question || "";
   const answers = context.answers || [];
-  const multiAssessment = await generateMultiAIAssessment(symptoms, answers);
-  const response = multiAssessment.overall_assessment || "I have reviewed your symptoms. Please provide more details if needed.";
+  const assessment = await generateMultiAIAssessment(symptoms, answers);
+  const response = assessment.overall_assessment || `I have noted your symptom: ${question}. Please tell me more details if needed.`;
   res.json({ response });
 });
 
