@@ -29,11 +29,12 @@
     .user{background:#7c3aed;border-top-right-radius:4px}
     .listen-btn{position:absolute;right:14px;bottom:12px;font-size:20px;cursor:pointer;opacity:0.75}
     .listen-btn:hover{opacity:1}
-    .inputbar{display:flex;gap:12px;padding:18px 24px;background:#020617;border-top:1px solid #1e293b}
+    .image-preview{max-width:220px;margin-top:8px;border-radius:12px}
+    .inputbar{display:flex;gap:12px;padding:18px 24px;background:#020617;border-top:1px solid #1e293b;align-items:end}
     input{width:100%;box-sizing:border-box;background:#1e293b;color:white;border:1px solid #334155;border-radius:16px;padding:16px 20px;font-size:16px}
     button{background:#7c3aed;color:white;border:none;padding:14px 22px;border-radius:16px;cursor:pointer;font-weight:700;font-size:16px}
     button.secondary{background:#334155}
-    .mic-btn{font-size:26px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#7c3aed}
+    .mic-btn,.image-btn{font-size:26px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#7c3aed;margin-bottom:4px}
     .listening{animation: pulse 1.5s infinite}
     @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
     .panel-wrapper{border-top:1px solid #1e293b;background:#020617}
@@ -64,69 +65,71 @@ let activePrompts=[];
 let isWaiting=false;
 let currentDoctor="female";
 let chatMode="guided";
-let panelOpen = false;
+let messages=[];
+let panelOpen=false;
+let currentImageBase64=null;
 
 // Stable Voice Engine
-let voicesLoaded = false;
-let femaleVoice = null;
-let maleVoice = null;
+let voicesLoaded=false;
+let femaleVoice=null;
+let maleVoice=null;
 
-function loadVoices() {
-  const all = speechSynthesis.getVoices();
-  if (all.length === 0) return;
-  voicesLoaded = true;
-  femaleVoice = all.find(v => v.lang === "en-AU" && /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) || all.find(v => /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) || all[0];
-  maleVoice = all.find(v => v.lang === "en-AU" && /male|james|david|daniel|oliver|henry/i.test(v.name)) || all.find(v => /male|james|david|daniel|oliver|henry/i.test(v.name)) || all[1] || all[0];
+function loadVoices(){
+  const all=speechSynthesis.getVoices();
+  if(all.length===0)return;
+  voicesLoaded=true;
+  femaleVoice=all.find(v=>v.lang==="en-AU"&&/female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name))||all.find(v=>/female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name))||all[0];
+  maleVoice=all.find(v=>v.lang==="en-AU"&&/male|james|david|daniel|oliver|henry/i.test(v.name))||all.find(v=>/male|james|david|daniel|oliver|henry/i.test(v.name))||all[1]||all[0];
 }
-if ('speechSynthesis' in window) {
-  speechSynthesis.onvoiceschanged = loadVoices;
+if('speechSynthesis'in window){
+  speechSynthesis.onvoiceschanged=loadVoices;
   loadVoices();
-  setTimeout(loadVoices, 800);
+  setTimeout(loadVoices,800);
 }
 
-function speak(text) {
-  if (!('speechSynthesis' in window)) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  const profile = doctorProfiles[currentDoctor];
-  utterance.voice = profile.voice === "female" ? femaleVoice : maleVoice;
-  utterance.pitch = profile.voice === "female" ? 1.1 : 0.95;
-  utterance.rate = 0.97;
-  if (!voicesLoaded) { setTimeout(() => speak(text), 600); return; }
+function speak(text){
+  if(!('speechSynthesis'in window))return;
+  const utterance=new SpeechSynthesisUtterance(text);
+  const profile=doctorProfiles[currentDoctor];
+  utterance.voice=profile.voice==="female"?femaleVoice:maleVoice;
+  utterance.pitch=profile.voice==="female"?1.1:0.95;
+  utterance.rate=0.97;
+  if(!voicesLoaded){setTimeout(()=>speak(text),600);return;}
   speechSynthesis.speak(utterance);
 }
 
-const doctorProfiles = {
-  female: { name:"Dr. Elena Voss", title:"DOCTORPD Clinical AI", avatar:"https://randomuser.me/api/portraits/women/44.jpg", voice:"female" },
-  male:   { name:"Dr. James Harper", title:"DOCTORPD Clinical AI", avatar:"https://randomuser.me/api/portraits/men/32.jpg", voice:"male" }
+const doctorProfiles={
+  female:{name:"Dr. Elena Voss",title:"DOCTORPD Clinical AI",avatar:"https://randomuser.me/api/portraits/women/44.jpg",voice:"female"},
+  male:{name:"Dr. James Harper",title:"DOCTORPD Clinical AI",avatar:"https://randomuser.me/api/portraits/men/32.jpg",voice:"male"}
 };
 
-function startVoiceInput() {
-  if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+function startVoiceInput(){
+  if(!('SpeechRecognition'in window||'webkitSpeechRecognition'in window)){
     alert("Voice input not supported in this browser. Please use Chrome or Edge.");
     return;
   }
-  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-  recognition.lang = "en-AU";
-  const micBtn = document.getElementById("micBtn");
-  if (micBtn) micBtn.classList.add("listening");
-  recognition.onresult = e => {
-    const transcript = e.results[0][0].transcript;
-    const input = document.getElementById("input");
-    if (input) { input.value = transcript; send(); }
+  const recognition=new (window.SpeechRecognition||window.webkitSpeechRecognition)();
+  recognition.lang="en-AU";
+  const micBtn=document.getElementById("micBtn");
+  if(micBtn)micBtn.classList.add("listening");
+  recognition.onresult=e=>{
+    const transcript=e.results[0][0].transcript;
+    const input=document.getElementById("input");
+    if(input){input.value=transcript;send();}
   };
-  recognition.onerror = recognition.onend = () => { if (micBtn) micBtn.classList.remove("listening"); };
+  recognition.onerror=recognition.onend=()=>{if(micBtn)micBtn.classList.remove("listening");};
   recognition.start();
 }
 
-function switchDoctor(gender) {
-  currentDoctor = gender;
-  document.querySelectorAll('.gender-btn').forEach(b => b.classList.toggle('active', b.dataset.gender===gender));
+function switchDoctor(gender){
+  currentDoctor=gender;
+  document.querySelectorAll('.gender-btn').forEach(b=>b.classList.toggle('active',b.dataset.gender===gender));
   showChat();
 }
 
-function setMode(mode) {
-  chatMode = mode;
-  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode===mode));
+function setMode(mode){
+  chatMode=mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
   showChat();
 }
 
@@ -134,15 +137,17 @@ function money(n){return "$"+Number(n||0).toLocaleString();}
 function scrollChat(){const chat=document.getElementById("chat");if(chat)chat.scrollTop=chat.scrollHeight;}
 function copyText(id){navigator.clipboard.writeText(document.getElementById(id).value);alert("Copied");}
 
-function togglePanel() {
-  panelOpen = !panelOpen;
-  const content = document.getElementById("panelContent");
-  if (content) content.style.display = panelOpen ? "block" : "none";
+function togglePanel(){
+  panelOpen=!panelOpen;
+  const content=document.getElementById("panelContent");
+  if(content)content.style.display=panelOpen?"block":"none";
 }
 
 function showChat(){
   conversation={symptoms:"",answers:[],questionIndex:0};
   latestAI=null;activePrompts=[];isWaiting=false;
+  messages=[];
+  currentImageBase64=null;
   document.getElementById("app").innerHTML=`
     <div class="doctor">
       <div class="avatar"><img src="${doctorProfiles[currentDoctor].avatar}" alt="Doctor"></div>
@@ -162,8 +167,8 @@ function showChat(){
     <div id="chat" class="chat"></div>
     <div class="panel-wrapper">
       <div class="panel-header" onclick="togglePanel()">
-        <span>📋 Clinical Tools (Note, FHIR, Override)</span>
-        <span id="panelToggle">${panelOpen ? '▼' : '▲'}</span>
+        <span>📋 Clinical Tools</span>
+        <span id="panelToggle">${panelOpen?'▼':'▲'}</span>
       </div>
       <div id="panelContent" class="panel-content" style="display:none;">
         <b>Structured Clinical Note</b>
@@ -185,6 +190,9 @@ function showChat(){
     </div>
     <div class="inputbar">
       <input id="input" placeholder="${chatMode==='free'?'Ask DOCTORPD anything...':'Describe symptoms or speak your answer...'}"/>
+      <label class="image-btn" title="Upload image">📸
+        <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+      </label>
       <button onclick="send()">Send</button>
       <button class="mic-btn" id="micBtn" onclick="startVoiceInput()" title="Speak">🎤</button>
       <button class="secondary" onclick="showChat()">New Chat</button>
@@ -194,10 +202,23 @@ function showChat(){
   addAI(`Hi, I'm ${doctorProfiles[currentDoctor].name.split(" ")[1]}. How can I help you today?`);
 }
 
+function handleImageUpload(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    currentImageBase64=ev.target.result.split(",")[1];
+    const chat=document.getElementById("chat");
+    chat.innerHTML+=`<div class="row user-row"><div style="max-width:220px"><img src="${ev.target.result}" class="image-preview"></div></div>`;
+    scrollChat();
+  };
+  reader.readAsDataURL(file);
+}
+
 function addAI(text){
   const chat=document.getElementById("chat");
-  const id = "msg-" + Date.now();
-  chat.innerHTML += `<div class="row" id="${id}"><div class="avatar" style="width:42px;height:42px;overflow:hidden;border-radius:50%;"><img src="${doctorProfiles[currentDoctor].avatar}" style="width:100%;height:100%;object-fit:cover"></div><div class="bubble ai">${text}<span class="listen-btn" onclick="speak('${text.replace(/'/g, "\\'")}')">🔊</span></div></div>`;
+  const id="msg-"+Date.now();
+  chat.innerHTML+=`<div class="row" id="${id}"><div class="avatar" style="width:42px;height:42px;overflow:hidden;border-radius:50%;"><img src="${doctorProfiles[currentDoctor].avatar}" style="width:100%;height:100%;object-fit:cover"></div><div class="bubble ai">${text}<span class="listen-btn" onclick="speak('${text.replace(/'/g,"\\'")}')">🔊</span></div></div>`;
   scrollChat();
   speak(text);
 }
@@ -209,36 +230,37 @@ function addUser(text){
 }
 
 async function send(){
-  if(isWaiting) return;
+  if(isWaiting)return;
   const input=document.getElementById("input");
   const text=input.value.trim();
-  if(!text) return;
-  addUser(text);
+  if(!text&&!currentImageBase64)return;
+
+  if(text)addUser(text);
   input.value="";
   isWaiting=true;
   addAI("Thinking...");
 
-  let res, data;
-  if(chatMode === "free"){
-    res = await fetch("/ai/ask-doctor",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:text,context:latestAI||conversation})});
-    data = await res.json();
-    document.getElementById("chat").lastElementChild.remove();
-    addAI(data.response || "Sorry, I couldn't process that.");
-  } else {
-    if(!conversation.symptoms){conversation.symptoms=text;}else{conversation.answers.push(text);conversation.questionIndex+=1;}
+  const payload={question:text||"[Image uploaded for analysis]",context:latestAI||conversation,imageBase64:currentImageBase64};
+
+  let res,data;
+  if(chatMode==="free"){
+    res=await fetch("/ai/ask-doctor",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    data=await res.json();
+  }else{
+    if(!conversation.symptoms&&text)conversation.symptoms=text;
+    else if(text)conversation.answers.push(text);
     res=await fetch("/ai/personal-check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(conversation)});
     data=await res.json();
-    document.getElementById("chat").lastElementChild.remove();
-    if(data.mode==="question"){addAI(data.question);isWaiting=false;return;}
-    latestAI=data;
-    renderFinal(data);
-    generateNote();
-    generateFHIR();
   }
+
+  document.getElementById("chat").lastElementChild.remove();
+  addAI(data.response||data.overall_assessment||"Sorry, I couldn't process that.");
+
+  currentImageBase64=null;
   isWaiting=false;
 }
 
-// ==================== ORIGINAL FUNCTIONS (unchanged) ====================
+// ==================== ORIGINAL FUNCTIONS ====================
 function renderFinal(data){
   activePrompts=data.revenue_prompts||[];
   let out="";
@@ -321,17 +343,53 @@ async function submitOverride(){
   alert("Override logged");
 }
 
-// All other original functions (showDiagnostics, runDiagnostics, etc.) remain unchanged
-function showDiagnostics(){ /* your original */ }
-async function runDiagnostics(){ /* your original */ }
-function showDocumentation(){ /* your original */ }
-async function analyseDoc(){ /* your original */ }
-function showFunding(){ /* your original */ }
-async function runFunding(){ /* your original */ }
-async function saveCase(predicted){ /* your original */ }
-async function showCases(){ /* your original */ }
-async function showMetrics(){ /* your original */ }
-async function showAudit(){ /* your original */ }
+function showDiagnostics(){
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Diagnostics</h2><textarea id="diagDescription" placeholder="Describe issue or image findings..."></textarea><input type="file" id="diagImage" accept="image/*"><button onclick="runDiagnostics()">Analyse</button><div id="diagOut"></div></div>`;
+}
+async function runDiagnostics(){
+  const description=document.getElementById("diagDescription").value;
+  const file=document.getElementById("diagImage").files[0];
+  let imageBase64="";
+  if(file){imageBase64=await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(",")[1]);reader.readAsDataURL(file);});}
+  const res=await fetch("/ai/diagnostics-assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({description,imageBase64})});
+  const d=await res.json();
+  document.getElementById("diagOut").innerHTML=`<div class="box"><b>Assessment</b><br>${d.image_assessment}</div><div class="box"><b>Triage</b><br>${d.triage.score} — ${d.triage.urgency}</div><div class="box"><b>Possible Conditions</b><br>${(d.possible_conditions||[]).map(x=>"• "+x.name+" — "+x.reason).join("<br>")}</div><div class="box"><b>Imaging</b><br>${d.recommended_diagnostics.imaging.map(x=>`${x.test} — ${x.reason}`).join("<br>")}</div><div class="box"><b>Pathology</b><br>${d.recommended_diagnostics.pathology.map(x=>`${x.test} — ${x.reason}`).join("<br>")||"None suggested"}</div>`;
+}
+function showDocumentation(){
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Documentation Assistant</h2><textarea id="docText"></textarea><button onclick="analyseDoc()">Analyse</button><div id="docOut"></div></div>`;
+}
+async function analyseDoc(){
+  const note=document.getElementById("docText").value;
+  const res=await fetch("/ai/clinical-assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note})});
+  const d=await res.json();
+  document.getElementById("docOut").innerHTML=`<div class="box"><b>Suggestions</b><br>${d.suggestions.map(x=>"• "+x).join("<br>")}</div><div class="box"><b>Funding Prompts</b><br>${d.funding_prompts.map(x=>"• "+x.prompt+" → "+money(x.estimated_uplift)).join("<br>")}</div><div class="box"><b>ICD Opportunities</b><br>${d.icd_opportunities.map(x=>"• "+x.indicative_code+" — "+x.description+" — "+x.documentation_needed).join("<br>")}</div><div class="box"><b>Audit Risks</b><br>${d.audit_risks.map(x=>"• "+x).join("<br>")}</div>`;
+}
+function showFunding(){
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Funding Estimator</h2><input id="dx" placeholder="Enter diagnosis"><button onclick="runFunding()">Estimate</button><div id="fundingOut"></div></div>`;
+}
+async function runFunding(){
+  const diagnosis=document.getElementById("dx").value;
+  const res=await fetch("/drg/estimate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({diagnosis})});
+  const d=await res.json();
+  document.getElementById("fundingOut").innerHTML=`<div class="box">Predicted Funding: <b>${money(d.funding)}</b><input id="actualFunding" placeholder="Actual funding"><button onclick="saveCase(${d.funding})">Save Case</button></div>`;
+}
+async function saveCase(predicted){
+  const actual=Number(document.getElementById("actualFunding").value||0);
+  await fetch("/pilot/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({predicted,actual})});
+  alert("Saved");
+}
+async function showCases(){
+  const res=await fetch("/pilot/data");const rows=await res.json();
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Case Tracking</h2><table><tr><th>ID</th><th>Patient</th><th>Predicted</th><th>Actual</th><th>Variance</th><th>Date</th></tr>${rows.map(r=>`<tr><td>${r.id}</td><td>${r.patientName}</td><td>${money(r.predicted)}</td><td>${money(r.actual)}</td><td>${money(r.actual-r.predicted)}</td><td>${new Date(r.created_at).toLocaleString()}</td></tr>`).join("")}</table></div>`;
+}
+async function showMetrics(){
+  const res=await fetch("/pilot/metrics");const d=await res.json();
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Metrics</h2><div class="metric-grid"><div class="metric">Predicted<b>${money(d.predicted)}</b></div><div class="metric">Actual<b>${money(d.actual)}</b></div><div class="metric">Variance<b>${money(d.delta)}</b></div><div class="metric">Cases<b>${d.total}</b></div></div></div>`;
+}
+async function showAudit(){
+  const res=await fetch("/audit/data");const rows=await res.json();
+  document.getElementById("app").innerHTML=`<div class="card"><h2>Audit Trail</h2><table><tr><th>Time</th><th>Action</th><th>Details</th></tr>${rows.map(r=>`<tr><td>${new Date(r.timestamp).toLocaleString()}</td><td>${r.action}</td><td><pre>${JSON.stringify(r.details,null,2)}</pre></td></tr>`).join("")}</table></div>`;
+}
 
 showChat();
 </script>
