@@ -11,6 +11,9 @@ app.use(express.static(path.join(process.cwd(), "public")));
 
 let users = {};
 let conversations = {};
+let cases = [];
+let overrides = [];
+let auditLogs = [];
 
 const SAFETY_NOTICE = "Decision support only. Not a diagnosis. Requires clinician review. If symptoms are severe or urgent, seek medical care immediately.";
 
@@ -76,6 +79,8 @@ function classify(text = "") {
   if (/(fracture|broken bone|broken|fall|injury|trauma|twisted|sprain|deformed|open wound|cannot weight bear|can't weight bear|broken arm|broken leg)/.test(t)) return "trauma";
   if (/(knee|ankle|hip|shoulder|elbow|wrist|joint|muscle|ache|stiff|swelling|locked|strain|sprain|back pain|neck pain)/.test(t)) return "musculoskeletal";
   if (/(depressed|anxious|panic|suicidal|kill myself|mental health|self harm)/.test(t)) return "mental_health";
+  if (/(stomach cramps|stomach pain|abdominal pain|cramps|belly ache)/.test(t)) return "general";
+  if (/(headache|head pain|migraine)/.test(t)) return "general";
   return "general";
 }
 
@@ -216,23 +221,17 @@ app.post("/ai/personal-check", async (req, res) => {
   res.json(finalAssessment);
 });
 
-// ====================== FREE CHAT ======================
+// ====================== FREE CHAT (now with strong fallback) ======================
 app.post("/ai/ask-doctor", async (req, res) => {
-  const { question = "", context = {}, imageBase64 = null } = req.body;
-  const [openai, gemini] = await Promise.all([
-    callOpenAIForAssessment(context.symptoms || "", context.answers || []),
-    callGeminiForAssessment(context.symptoms || "", context.answers || [])
-  ]);
-  const results = [openai, gemini].filter(Boolean);
-  let response = results.length > 0 
-    ? results[0].overall_assessment || results[0].advice || "I have reviewed your question."
-    : "Sorry, the AI service is temporarily unavailable.";
-  if (imageBase64) response += "\n\n(Image analysis included in the above assessment.)";
-  response += `\n\n${SAFETY_NOTICE}`;
+  const { question = "", context = {} } = req.body;
+  const symptoms = context.symptoms || question;
+  const answers = context.answers || [];
+  const multiAssessment = await generateMultiAIAssessment(symptoms, answers);
+  const response = multiAssessment.overall_assessment || "I have reviewed your symptoms. Please provide more details if needed.";
   res.json({ response });
 });
 
-// ====================== OTHER ORIGINAL ROUTES ======================
+// ====================== OTHER ROUTES ======================
 app.post("/ai/diagnostics-assist", (req, res) => {
   const { description = "", imageBase64 = "" } = req.body;
   const type = classify(description);
@@ -278,10 +277,6 @@ app.post("/drg/estimate", (req, res) => {
   if (diagnosis.includes("knee") || diagnosis.includes("pain")) funding = 2400;
   res.json({ funding });
 });
-
-let cases = [];
-let overrides = [];
-let auditLogs = [];
 
 app.post("/pilot/track", (req, res) => {
   const { predicted, actual, patientName = "Unknown" } = req.body;
