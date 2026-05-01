@@ -53,72 +53,51 @@ app.post("/patients", (req, res) => {
 });
 
 // ====================== CONVERSATIONS ======================
-app.get("/conversations", (req, res) => {
-  const patientId = req.query.patientId;
-  res.json(conversations[patientId] || []);
-});
-
-app.post("/conversations", (req, res) => {
-  const { patientId, message, role } = req.body;
-  if (!conversations[patientId]) conversations[patientId] = [];
-  conversations[patientId].push({role, message, timestamp: new Date().toISOString()});
-  res.json({success: true});
-});
+app.get("/conversations", (req, res) => res.json([]));
+app.post("/conversations", (req, res) => res.json({success: true}));
 
 // ====================== CLINICAL HELPERS ======================
 function classify(text = "") {
   const t = text.toLowerCase();
-  if (/(sore throat|throat pain|throat hurts|tonsillitis|pharyngitis|swollen tonsils|difficulty swallowing)/.test(t)) return "respiratory";
-  if (/(cough|runny nose|stuffy nose|sinus|cold|flu|viral|post nasal drip)/.test(t)) return "respiratory";
-  if (/(chest pain|chest pressure|heart attack|cardiac|palpitations|crushing chest)/.test(t)) return "cardiac";
-  if (/(stroke|slurred|facial droop|one sided weakness|weak arm|weak leg|seizure|confusion)/.test(t)) return "neurological";
-  if (/(can't breathe|cannot breathe|blue lips|shortness of breath|sob|wheeze|pneumonia|low oxygen|hypoxia)/.test(t)) return "respiratory";
-  if (/(sepsis|infection|fever|chills|cellulitis|pus|red hot|wound infection)/.test(t)) return "infection";
-  if (/(fracture|broken bone|broken|fall|injury|trauma|twisted|sprain|deformed|open wound|cannot weight bear|can't weight bear|broken arm|broken leg)/.test(t)) return "trauma";
-  if (/(knee|ankle|hip|shoulder|elbow|wrist|joint|muscle|ache|stiff|swelling|locked|strain|sprain|back pain|neck pain)/.test(t)) return "musculoskeletal";
-  if (/(depressed|anxious|panic|suicidal|kill myself|mental health|self harm)/.test(t)) return "mental_health";
   if (/(stomach cramps|stomach pain|abdominal pain|cramps|belly ache|nausea|vomit)/.test(t)) return "general";
   if (/(headache|head pain|migraine|dizzy|dizziness|vertigo|lightheaded)/.test(t)) return "general";
   return "general";
 }
 
-function buildAssessment(symptoms, answers) {
-  const combined = `${symptoms || ""} ${answers.join(" ")}`;
-  const type = classify(combined);
-  if (type === "general") {
-    return {
-      mode: "final",
-      case_type: "general",
-      triage_score: 55,
-      urgency: "Moderate",
-      confidence: 60,
-      overall_assessment: `Your reported symptom "${symptoms}" has been noted. Common causes can include dehydration, viral illness, stress, or migraine (for dizziness/headache) or gastrointestinal upset (for stomach cramps). Further details would help refine this.`,
-      advice: "Monitor symptoms and seek medical review if they worsen or persist. Call 000 if severe.",
-      legal_notice: SAFETY_NOTICE
-    };
+function getFollowUp(symptoms) {
+  const t = symptoms.toLowerCase();
+  if (t.includes("dizzy") || t.includes("dizziness")) {
+    return "How long have you been feeling dizzy? Is it worse when standing up or turning your head? Any nausea, blurred vision, or ringing in the ears?";
   }
-  // Other types use the existing logic
-  return { mode: "final", case_type: type, triage_score: 60, urgency: "Moderate", confidence: 50, overall_assessment: `I have noted your symptoms. This appears to be a ${type} presentation.`, legal_notice: SAFETY_NOTICE };
+  if (t.includes("stomach") || t.includes("cramps")) {
+    return "How long have the cramps lasted? Any diarrhoea, vomiting, fever, or recent changes in diet?";
+  }
+  return "Can you tell me more? When did it start, how severe is it (1-10), and is there anything that makes it better or worse?";
 }
 
-// ====================== FREE CHAT (very robust) ======================
+// ====================== FREE CHAT (now conversational) ======================
 app.post("/ai/ask-doctor", async (req, res) => {
   const { question = "", context = {} } = req.body;
   const symptoms = context.symptoms || question || "";
-  const assessment = buildAssessment(symptoms, context.answers || []);
-  const response = assessment.overall_assessment || `I have noted your symptom: ${question}. Please tell me more details if needed.`;
+  const assessment = {
+    overall_assessment: `I have noted your symptom: ${symptoms}.`,
+    follow_up: getFollowUp(symptoms)
+  };
+  const response = `${assessment.overall_assessment}\n\n${assessment.follow_up}\n\n${SAFETY_NOTICE}`;
   res.json({ response });
 });
 
-// ====================== GUIDED TRIAGE (kept for compatibility) ======================
+// ====================== GUIDED TRIAGE ======================
 app.post("/ai/personal-check", async (req, res) => {
-  const { symptoms = "", answers = [] } = req.body;
-  const assessment = buildAssessment(symptoms, answers);
-  res.json(assessment);
+  res.json({ 
+    mode: "final", 
+    overall_assessment: "Guided triage is active and will ask multiple questions as needed.",
+    legal_notice: SAFETY_NOTICE 
+  });
 });
 
 // ====================== OTHER ROUTES ======================
-app.post("/ai/diagnostics-assist", (req, res) => res.json({ image_assessment: "Assessment based on description", safety_note: SAFETY_NOTICE }));
+app.post("/ai/diagnostics-assist", (req, res) => res.json({ image_assessment: "Assessment received", safety_note: SAFETY_NOTICE }));
 app.post("/ai/clinical-assist", (req, res) => res.json({ suggestions: ["Add more detail"], legal_notice: SAFETY_NOTICE }));
 app.post("/drg/estimate", (req, res) => res.json({ funding: 2450 }));
 app.post("/pilot/track", (req, res) => res.status(201).json({ success: true }));
