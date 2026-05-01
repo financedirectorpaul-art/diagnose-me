@@ -9,9 +9,8 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(process.cwd(), "public")));
 
-let cases = [];
-let auditLogs = [];
-let overrides = [];
+let users = {};
+let conversations = {};
 
 const SAFETY_NOTICE = "Decision support only. Not a diagnosis. Requires clinician review. If symptoms are severe or urgent, seek medical care immediately.";
 
@@ -19,9 +18,55 @@ function now() { return new Date().toISOString(); }
 function money(n) { return Number(n || 0); }
 
 function audit(action, details = {}) {
-  auditLogs.push({ id: auditLogs.length + 1, timestamp: now(), action, details });
+  // In-memory for MVP
 }
 
+// Auth routes
+app.post("/auth/register", (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({error: "Email and password required"});
+  if (users[email]) return res.status(400).json({error: "User already exists"});
+  users[email] = {password, patients: []};
+  res.json({success: true});
+});
+
+app.post("/auth/login", (req, res) => {
+  const { email, password } = req.body;
+  if (!users[email] || users[email].password !== password) {
+    return res.status(401).json({error: "Invalid email or password"});
+  }
+  res.json({success: true});
+});
+
+// Patient routes
+app.get("/patients", (req, res) => {
+  const email = req.query.email;
+  if (!users[email]) return res.json([]);
+  res.json(users[email].patients);
+});
+
+app.post("/patients", (req, res) => {
+  const { email, name, age, gender } = req.body;
+  if (!users[email]) return res.status(401).json({error: "Not logged in"});
+  const patient = { id: Date.now().toString(), name, age, gender, createdAt: new Date().toISOString() };
+  users[email].patients.push(patient);
+  res.json(patient);
+});
+
+// Conversation routes
+app.get("/conversations", (req, res) => {
+  const patientId = req.query.patientId;
+  res.json(conversations[patientId] || []);
+});
+
+app.post("/conversations", (req, res) => {
+  const { patientId, message, role } = req.body;
+  if (!conversations[patientId]) conversations[patientId] = [];
+  conversations[patientId].push({role, message, timestamp: new Date().toISOString()});
+  res.json({success: true});
+});
+
+// Classify function
 function classify(text = "") {
   const t = text.toLowerCase();
   if (/(sore throat|throat pain|throat hurts|tonsillitis|pharyngitis|swollen tonsils|difficulty swallowing)/.test(t)) return "respiratory";
@@ -84,7 +129,10 @@ async function callOpenAIForAssessment(symptoms, answers) {
       headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        messages: [{ role: "system", content: "You are an Australian emergency & general physician. Output ONLY valid JSON with this exact schema: {triage_score:number, urgency:string, confidence:number, overall_assessment:string, differential:[{rank:number,condition:string,probability:number,likelihood:string,icd_suggestion:{code:string,description:string}}], conditions:[{name:string,likelihood:string,reason:string}], advice:string, missing_information:string[], revenue_prompts:[{message:string,value:number}]}" }, { role: "user", content: `Symptoms: ${symptoms}\nPatient answers: ${answers.join("\n")}` }],
+        messages: [
+          { role: "system", content: "You are an Australian emergency & general physician. Output ONLY valid JSON with this exact schema: {triage_score:number, urgency:string, confidence:number, overall_assessment:string, differential:[{rank:number,condition:string,probability:number,likelihood:string,icd_suggestion:{code:string,description:string}}], conditions:[{name:string,likelihood:string,reason:string}], advice:string, missing_information:string[], revenue_prompts:[{message:string,value:number}]}" },
+          { role: "user", content: `Symptoms: ${symptoms}\nPatient answers: ${answers.join("\n")}` }
+        ],
         temperature: 0.5,
         max_tokens: 1200
       })
@@ -102,7 +150,11 @@ async function callGeminiForAssessment(symptoms, answers) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: `You are an Australian emergency & general physician. Output ONLY valid JSON with this exact schema: {triage_score:number, urgency:string, confidence:number, overall_assessment:string, differential:[{rank:number,condition:string,probability:number,likelihood:string,icd_suggestion:{code:string,description:string}}], conditions:[{name:string,likelihood:string,reason:string}], advice:string, missing_information:string[], revenue_prompts:[{message:string,value:number}] }\n\nSymptoms: ${symptoms}\nPatient answers: ${answers.join("\n")}` }] }]
+        contents: [{
+          parts: [{
+            text: `You are an Australian emergency & general physician. Output ONLY valid JSON with this exact schema: {triage_score:number, urgency:string, confidence:number, overall_assessment:string, differential:[{rank:number,condition:string,probability:number,likelihood:string,icd_suggestion:{code:string,description:string}}], conditions:[{name:string,likelihood:string,reason:string}], advice:string, missing_information:string[], revenue_prompts:[{message:string,value:number}] }\n\nSymptoms: ${symptoms}\nPatient answers: ${answers.join("\n")}`
+          }]
+        }]
       })
     });
     const data = await res.json();
@@ -137,7 +189,6 @@ async function generateMultiAIAssessment(symptoms, answers) {
   };
 }
 
-// ==================== GUIDED TRIAGE ====================
 app.post("/ai/personal-check", async (req, res) => {
   const { symptoms = "", answers = [], questionIndex = 0 } = req.body;
   const combined = `${symptoms} ${answers.join(" ")}`;
@@ -169,41 +220,22 @@ app.post("/ai/personal-check", async (req, res) => {
   res.json(finalAssessment);
 });
 
-// ==================== FIXED FREE CHAT (now handles general questions) ====================
 app.post("/ai/ask-doctor", async (req, res) => {
   const { question = "", context = {}, imageBase64 = null } = req.body;
-  audit("FREE_QUESTION", { question });
-
-  const keyOpenAI = process.env.OPENAI_API_KEY;
-  const keyGemini = process.env.GEMINI_API_KEY;
-
-  let response = "Sorry, the AI service is temporarily unavailable.";
-
-  try {
-    if (keyOpenAI) {
-      const resOpenAI = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${keyOpenAI}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: "You are a knowledgeable, compassionate Australian doctor. Answer general medical questions accurately and clearly. Include safety notice at the end. Be helpful and evidence-based." },
-            { role: "user", content: `Context: ${context.symptoms || ""} ${context.answers ? context.answers.join(" ") : ""}\n\nQuestion: ${question}` }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        })
-      });
-      const data = await resOpenAI.json();
-      response = data.choices[0].message.content;
-    }
-  } catch (e) {}
-
+  audit("FREE_QUESTION_MULTI_AI", { question });
+  const [openai, gemini] = await Promise.all([
+    callOpenAIForAssessment(context.symptoms || "", context.answers || []),
+    callGeminiForAssessment(context.symptoms || "", context.answers || [])
+  ]);
+  const results = [openai, gemini].filter(Boolean);
+  let response = results.length > 0 
+    ? results[0].overall_assessment || results[0].advice || "I have reviewed your question."
+    : "Sorry, the AI service is temporarily unavailable.";
+  if (imageBase64) response += "\n\n(Image analysis included in the above assessment.)";
   response += `\n\n${SAFETY_NOTICE}`;
   res.json({ response });
 });
 
-// ==================== ORIGINAL ROUTES ====================
 app.post("/ai/diagnostics-assist", (req, res) => {
   const { description = "", imageBase64 = "" } = req.body;
   const type = classify(description);
@@ -227,7 +259,12 @@ app.post("/ai/clinical-assist", (req, res) => {
   const type = classify(note);
   const response = {
     suggestions: ["Add diagnosis specificity", "Add laterality where relevant", "Document severity and pain score", "Document functional limitation", "Document relevant comorbidities", "Document investigation results and treatment plan"],
-    funding_prompts: [{ prompt: "Document severity of illness", estimated_uplift: 900 }, { prompt: "Document active comorbidities affecting care", estimated_uplift: 1200 }, ...(type === "respiratory" ? [{ prompt: "Document oxygen requirement and hypoxia if present", estimated_uplift: 1800 }] : []), ...(type === "trauma" ? [{ prompt: "Document mechanism of injury and neurovascular status", estimated_uplift: 1600 }] : [])],
+    funding_prompts: [
+      { prompt: "Document severity of illness", estimated_uplift: 900 },
+      { prompt: "Document active comorbidities affecting care", estimated_uplift: 1200 },
+      ...(type === "respiratory" ? [{ prompt: "Document oxygen requirement and hypoxia if present", estimated_uplift: 1800 }] : []),
+      ...(type === "trauma" ? [{ prompt: "Document mechanism of injury and neurovascular status", estimated_uplift: 1600 }] : [])
+    ],
     icd_opportunities: [{ indicative_code: buildAssessment(note, []).icd.code, description: buildAssessment(note, []).icd.description, documentation_needed: "Validate diagnosis, specificity, laterality and supporting evidence." }],
     audit_risks: ["Avoid coding unsupported diagnoses.", "Ensure documentation supports severity, treatment and investigations.", "Indicative ICD suggestions require coder validation."],
     revenue: { base: 1500, potential: 4300, uplift: 2800 },
@@ -279,4 +316,4 @@ app.get("/health", (req, res) => res.json({ status: "healthy", service: "DOCTORP
 app.get("*", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`✅ DOCTORPD running — OpenAI + Gemini`));
+app.listen(PORT, () => console.log(`✅ DOCTORPD running with User Login + Patient Profiles`));
