@@ -17,11 +17,9 @@ const SAFETY_NOTICE = "Decision support only. Not a diagnosis. Requires clinicia
 function now() { return new Date().toISOString(); }
 function money(n) { return Number(n || 0); }
 
-function audit(action, details = {}) {
-  // In-memory for MVP
-}
+function audit(action, details = {}) {}
 
-// Auth routes
+// Auth
 app.post("/auth/register", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({error: "Email and password required"});
@@ -38,7 +36,7 @@ app.post("/auth/login", (req, res) => {
   res.json({success: true});
 });
 
-// Patient routes
+// Patient
 app.get("/patients", (req, res) => {
   const email = req.query.email;
   if (!users[email]) return res.json([]);
@@ -53,7 +51,7 @@ app.post("/patients", (req, res) => {
   res.json(patient);
 });
 
-// Conversation routes
+// Conversation
 app.get("/conversations", (req, res) => {
   const patientId = req.query.patientId;
   res.json(conversations[patientId] || []);
@@ -66,7 +64,7 @@ app.post("/conversations", (req, res) => {
   res.json({success: true});
 });
 
-// Classify function
+// Classify
 function classify(text = "") {
   const t = text.toLowerCase();
   if (/(sore throat|throat pain|throat hurts|tonsillitis|pharyngitis|swollen tonsils|difficulty swallowing)/.test(t)) return "respiratory";
