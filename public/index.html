@@ -179,7 +179,7 @@ async function login() {
     currentUser = {email};
     showPatientSelection();
   } else {
-    alert(data.error || "Login failed");
+    alert(data.error || "Invalid email or password");
   }
 }
 
@@ -190,9 +190,11 @@ async function register() {
 
   const res = await fetch("/auth/register", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
   const data = await res.json();
+
   if (data.success) {
-    alert("Account created! You can now log in.");
-    login();
+    alert("Account created successfully! Logging you in...");
+    currentUser = {email};
+    showPatientSelection();
   } else {
     alert(data.error || "Registration failed");
   }
