@@ -120,6 +120,7 @@ function buildAssessment(symptoms, answers) {
   if (type === "musculoskeletal") {
     return { mode: "final", case_type: "musculoskeletal", triage_score: 45, urgency: "Low to Moderate", confidence: 76, uncertainty: "Confidence depends on trauma history, swelling, range of motion, laterality, pain score and functional limitation.", red_flags: [], differential: [{rank:1,condition:"Musculoskeletal joint pain",probability:50,likelihood:"high",icd_suggestion:{code:"M25.569",description:"Pain in knee, unspecified"}},{rank:2,condition:"Soft tissue injury",probability:30,likelihood:"moderate",icd_suggestion:{code:"S83.9",description:"Sprain and strain of unspecified parts of knee"}},{rank:3,condition:"Degenerative joint disease",probability:20,likelihood:"low",icd_suggestion:{code:"M17.9",description:"Gonarthrosis, unspecified"}}], conditions: [{name:"Musculoskeletal joint pain",likelihood:"High",reason:"Localised sore knee/joint pain presentation."},{name:"Soft tissue injury",likelihood:"Moderate",reason:"Possible if related to strain, twisting or overuse."},{name:"Degenerative joint disease",likelihood:"Low",reason:"Possible if chronic, recurrent or age-related."}], overall_assessment: "Likely musculoskeletal knee or joint pain. Further assessment should clarify onset, injury mechanism, swelling, range of motion, weight-bearing ability and severity.", icd: {code:"M25.569",description:"Pain in knee, unspecified",confidence:80}, cpt: "99213", denial_risk: "Low", missing_information: ["Laterality","Pain score","Swelling","Range of motion","Ability to bear weight","Functional impact"], advice: "Consider clinical review if pain is severe, persistent, worsening, associated with swelling, locking, instability, fever, inability to bear weight, or trauma.", revenue_prompts: [{message:"Document laterality",value:300},{message:"Document pain score and functional limitation",value:600},{message:"Document range of motion and weight-bearing status",value:700}], funding: {baseline:1400,potential:3000,uplift:1600}, legal_notice: SAFETY_NOTICE };
   }
+  // Strong general fallback for common symptoms like dizziness, stomach cramps, headache
   return { mode: "final", case_type: "general", triage_score: 55, urgency: "Moderate", confidence: 60, uncertainty: "General symptom assessment", red_flags: [], differential: [{rank:1,condition:"General symptom presentation",probability:100,likelihood:"moderate",icd_suggestion:{code:"R69",description:"Illness, unspecified"}}], conditions: [{name:"General symptom presentation",likelihood:"Moderate",reason:"Common symptom input."}], overall_assessment: `Your reported symptom "${symptoms}" has been noted. Common causes can include dehydration, viral illness, stress, or migraine (for dizziness/headache) or gastrointestinal upset (for stomach cramps). Further details would help refine this.`, icd: {code:"R69",description:"Illness, unspecified",confidence:60}, cpt: "99213", denial_risk: "Low", missing_information: ["Duration","Severity","Associated symptoms"], advice: "Monitor symptoms and seek medical review if they worsen or persist. Call 000 if severe.", revenue_prompts: [], funding: {baseline:1500,potential:2300,uplift:800}, legal_notice: SAFETY_NOTICE };
 }
 
@@ -142,7 +143,7 @@ async function callOpenAIForAssessment(symptoms, answers) {
     });
     const data = await res.json();
     return JSON.parse(data.choices[0].message.content);
-  } catch { return null; }
+  } catch(e) { console.error("OpenAI error:", e.message); return null; }
 }
 
 async function callGeminiForAssessment(symptoms, answers) {
@@ -162,7 +163,7 @@ async function callGeminiForAssessment(symptoms, answers) {
     });
     const data = await res.json();
     return JSON.parse(data.candidates[0].content.parts[0].text);
-  } catch { return null; }
+  } catch(e) { console.error("Gemini error:", e.message); return null; }
 }
 
 async function generateMultiAIAssessment(symptoms, answers) {
@@ -220,11 +221,12 @@ app.post("/ai/personal-check", async (req, res) => {
   res.json(finalAssessment);
 });
 
-// ====================== FREE CHAT (strong fallback) ======================
+// ====================== FREE CHAT (now very robust) ======================
 app.post("/ai/ask-doctor", async (req, res) => {
   const { question = "", context = {} } = req.body;
   const symptoms = context.symptoms || question || "";
   const answers = context.answers || [];
+  console.log("Free chat received:", { question, symptoms });
   const assessment = await generateMultiAIAssessment(symptoms, answers);
   const response = assessment.overall_assessment || `I have noted your symptom: ${question}. Please tell me more details if needed.`;
   res.json({ response });
