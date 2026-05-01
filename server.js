@@ -19,7 +19,7 @@ function money(n) { return Number(n || 0); }
 
 function audit(action, details = {}) {}
 
-// Auth
+// ====================== AUTH ======================
 app.post("/auth/register", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({error: "Email and password required"});
@@ -36,7 +36,7 @@ app.post("/auth/login", (req, res) => {
   res.json({success: true});
 });
 
-// Patient
+// ====================== PATIENTS ======================
 app.get("/patients", (req, res) => {
   const email = req.query.email;
   if (!users[email]) return res.json([]);
@@ -51,7 +51,7 @@ app.post("/patients", (req, res) => {
   res.json(patient);
 });
 
-// Conversation
+// ====================== CONVERSATIONS ======================
 app.get("/conversations", (req, res) => {
   const patientId = req.query.patientId;
   res.json(conversations[patientId] || []);
@@ -64,7 +64,7 @@ app.post("/conversations", (req, res) => {
   res.json({success: true});
 });
 
-// Classify
+// ====================== CLINICAL HELPERS ======================
 function classify(text = "") {
   const t = text.toLowerCase();
   if (/(sore throat|throat pain|throat hurts|tonsillitis|pharyngitis|swollen tonsils|difficulty swallowing)/.test(t)) return "respiratory";
@@ -187,11 +187,11 @@ async function generateMultiAIAssessment(symptoms, answers) {
   };
 }
 
+// ====================== GUIDED TRIAGE ======================
 app.post("/ai/personal-check", async (req, res) => {
   const { symptoms = "", answers = [], questionIndex = 0 } = req.body;
   const combined = `${symptoms} ${answers.join(" ")}`;
   const type = classify(combined);
-  audit("CLINICAL_INPUT", { symptoms, answers, questionIndex, type });
   const red = emergencyTrigger(combined);
   if (red) {
     const multiAssessment = await generateMultiAIAssessment(symptoms, answers);
@@ -206,7 +206,6 @@ app.post("/ai/personal-check", async (req, res) => {
       advice: `Call 000 now or go to the nearest Emergency Department. Do not wait. ${multiAssessment.advice || ""}`,
       legal_notice: SAFETY_NOTICE
     };
-    audit("MULTI_AI_EMERGENCY", { red_flag: red });
     return res.json(emergencyResponse);
   }
   const qs = questionsFor(type);
@@ -214,13 +213,12 @@ app.post("/ai/personal-check", async (req, res) => {
     return res.json({ mode: "question", question: qs[questionIndex], questionIndex, totalQuestions: qs.length, urgency: "Pending", triage_score: 0, confidence: 10, uncertainty: "Gathering structured clinical information.", legal_notice: SAFETY_NOTICE });
   }
   const finalAssessment = await generateMultiAIAssessment(symptoms, answers);
-  audit("MULTI_AI_GUIDED_OUTPUT", finalAssessment);
   res.json(finalAssessment);
 });
 
+// ====================== FREE CHAT ======================
 app.post("/ai/ask-doctor", async (req, res) => {
   const { question = "", context = {}, imageBase64 = null } = req.body;
-  audit("FREE_QUESTION_MULTI_AI", { question });
   const [openai, gemini] = await Promise.all([
     callOpenAIForAssessment(context.symptoms || "", context.answers || []),
     callGeminiForAssessment(context.symptoms || "", context.answers || [])
@@ -234,6 +232,7 @@ app.post("/ai/ask-doctor", async (req, res) => {
   res.json({ response });
 });
 
+// ====================== OTHER ORIGINAL ROUTES ======================
 app.post("/ai/diagnostics-assist", (req, res) => {
   const { description = "", imageBase64 = "" } = req.body;
   const type = classify(description);
@@ -245,10 +244,8 @@ app.post("/ai/diagnostics-assist", (req, res) => {
       imaging: [{ test: "X-ray if trauma, deformity, swelling, or inability to bear weight", reason: "Rule out fracture or dislocation", urgency: type === "trauma" ? "Urgent" : "Routine/Urgent depending on severity" }],
       pathology: type === "infection" || type === "respiratory" ? [{ test: "FBC, CRP, cultures if clinically indicated", reason: "Assess infection/severity", urgency: "Routine/Urgent depending on severity" }] : []
     },
-    order_drafts: { imaging_request: "Clinician-reviewable imaging request draft.", pathology_request: "Clinician-reviewable pathology request draft." },
     safety_note: SAFETY_NOTICE
   };
-  audit("DIAGNOSTICS_OUTPUT", response);
   res.json(response);
 });
 
@@ -268,7 +265,6 @@ app.post("/ai/clinical-assist", (req, res) => {
     revenue: { base: 1500, potential: 4300, uplift: 2800 },
     legal_notice: SAFETY_NOTICE
   };
-  audit("DOCUMENTATION_REVIEW", { note, response });
   res.json(response);
 });
 
@@ -283,11 +279,14 @@ app.post("/drg/estimate", (req, res) => {
   res.json({ funding });
 });
 
+let cases = [];
+let overrides = [];
+let auditLogs = [];
+
 app.post("/pilot/track", (req, res) => {
   const { predicted, actual, patientName = "Unknown" } = req.body;
   const row = { id: cases.length + 1, patientName, predicted: money(predicted), actual: money(actual), created_at: now() };
   cases.push(row);
-  audit("CASE_SAVED", row);
   res.status(201).json({ success: true, case: row });
 });
 
@@ -302,7 +301,6 @@ app.get("/pilot/metrics", (req, res) => {
 app.post("/clinical/override", (req, res) => {
   const row = { id: overrides.length + 1, timestamp: now(), ...req.body };
   overrides.push(row);
-  audit("CLINICIAN_OVERRIDE", row);
   res.json({ success: true, override: row });
 });
 
@@ -314,4 +312,4 @@ app.get("/health", (req, res) => res.json({ status: "healthy", service: "DOCTORP
 app.get("*", (req, res) => res.sendFile(path.join(process.cwd(), "public", "index.html")));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`✅ DOCTORPD running with User Login + Patient Profiles`));
+app.listen(PORT, () => console.log(`✅ DOCTORPD running on port ${PORT}`));
