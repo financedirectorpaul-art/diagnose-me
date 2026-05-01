@@ -144,8 +144,95 @@ function togglePanel() {
   if (content) content.style.display = panelOpen ? "block" : "none";
 }
 
+function showLogin() {
+  document.getElementById("app").innerHTML = `
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#0a1120">
+      <div style="background:#1e293b;padding:40px 50px;border-radius:20px;width:100%;max-width:400px">
+        <h2 style="text-align:center;margin-bottom:30px;color:#7c3aed">DOCTORPD</h2>
+        <input id="email" placeholder="Email" style="width:100%;padding:14px;margin-bottom:12px;border-radius:12px;background:#0f172a;border:1px solid #334155;color:white">
+        <input id="password" type="password" placeholder="Password" style="width:100%;padding:14px;margin-bottom:20px;border-radius:12px;background:#0f172a;border:1px solid #334155;color:white">
+        <button onclick="login()" style="width:100%;padding:14px;background:#7c3aed;color:white;border:none;border-radius:12px;font-weight:700;margin-bottom:12px">Login</button>
+        <button onclick="register()" style="width:100%;padding:14px;background:#334155;color:white;border:none;border-radius:12px;font-weight:700">Create Account</button>
+      </div>
+    </div>`;
+}
+
+async function login() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+  if (!email || !password) return alert("Please enter email and password");
+
+  const res = await fetch("/auth/login", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({email, password})
+  });
+  const data = await res.json();
+  if (data.success) {
+    currentUser = {email};
+    showPatientSelection();
+  } else {
+    alert(data.error || "Login failed");
+  }
+}
+
+async function register() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+  if (!email || !password) return alert("Please enter email and password");
+
+  const res = await fetch("/auth/register", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({email, password})
+  });
+  const data = await res.json();
+  if (data.success) {
+    alert("Account created! Please log in.");
+    login();
+  } else {
+    alert(data.error || "Registration failed");
+  }
+}
+
+function showPatientSelection() {
+  document.getElementById("app").innerHTML = `
+    <div style="padding:40px">
+      <h2>Welcome, ${currentUser.email}</h2>
+      <button onclick="createNewPatient()" style="margin-bottom:20px">+ New Patient</button>
+      <div id="patientList"></div>
+    </div>`;
+  loadPatients();
+}
+
+async function loadPatients() {
+  const patients = JSON.parse(localStorage.getItem("patients_" + currentUser.email) || "[]");
+  const list = document.getElementById("patientList");
+  list.innerHTML = patients.map(p => `
+    <div onclick="selectPatient('${p.id}')" style="background:#1e293b;padding:15px;border-radius:12px;margin-bottom:10px;cursor:pointer">
+      <strong>${p.name}</strong> • ${p.age} • ${p.gender}
+    </div>`).join('');
+}
+
+function createNewPatient() {
+  const name = prompt("Patient full name:");
+  if (!name) return;
+  const age = prompt("Age:");
+  const gender = prompt("Gender (M/F/Other):");
+  const patient = { id: Date.now().toString(), name, age, gender };
+  let patients = JSON.parse(localStorage.getItem("patients_" + currentUser.email) || "[]");
+  patients.push(patient);
+  localStorage.setItem("patients_" + currentUser.email, JSON.stringify(patients));
+  showPatientSelection();
+}
+
+function selectPatient(id) {
+  const patients = JSON.parse(localStorage.getItem("patients_" + currentUser.email) || "[]");
+  currentPatient = patients.find(p => p.id === id);
+  showChat();
+}
+
 function showChat(){
-  if (!currentUser) return showLogin();
   document.getElementById("app").innerHTML=`
     <div class="doctor">
       <div class="avatar"><img src="${doctorProfiles[currentDoctor].avatar}" alt="Doctor"></div>
