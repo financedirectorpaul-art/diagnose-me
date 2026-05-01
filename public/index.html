@@ -1,54 +1,54 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Diagnose Me</title>
+  <title>DOCTORPD</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body{margin:0;background:#0f172a;color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
     .layout{display:grid;grid-template-columns:260px 1fr;height:100vh}
     .sidebar{background:#020617;border-right:1px solid #1e293b;padding:18px}
-    .brand{font-size:20px;font-weight:800;margin-bottom:20px}
-    .nav{padding:10px;border-radius:10px;cursor:pointer;margin-bottom:8px;color:#cbd5e1}
+    .brand{font-size:24px;font-weight:800;margin-bottom:24px;color:#7c3aed}
+    .nav{padding:12px 16px;border-radius:12px;cursor:pointer;margin-bottom:8px;color:#cbd5e1;font-weight:500}
     .nav:hover{background:#1e293b;color:white}
     .main{display:flex;flex-direction:column;height:100vh;overflow:hidden}
-    .doctor{display:flex;align-items:center;gap:12px;padding:14px 20px;background:#020617;border-bottom:1px solid #1e293b}
+    .doctor{display:flex;align-items:center;gap:16px;padding:16px 24px;background:#020617;border-bottom:1px solid #1e293b}
     .avatar{width:64px;height:64px;border-radius:50%;background:#1e293b;overflow:hidden;border:3px solid #7c3aed}
     .avatar img{width:100%;height:100%;object-fit:cover}
-    .doctor-name{font-weight:700;font-size:18px}
+    .doctor-name{font-weight:700;font-size:19px}
     .doctor-sub{color:#94a3b8;font-size:13px}
     .mode-toggle{display:flex;gap:8px;margin-left:auto;background:#1e293b;border-radius:9999px;padding:4px}
-    .mode-btn{padding:6px 16px;border-radius:9999px;font-size:13px;cursor:pointer}
+    .mode-btn{padding:8px 18px;border-radius:9999px;font-size:14px;cursor:pointer;font-weight:500}
     .mode-btn.active{background:#7c3aed;color:white}
-    .gender-toggle{display:flex;gap:8px;margin-left:12px}
-    .gender-btn{padding:6px 14px;border-radius:9999px;font-size:13px;cursor:pointer;background:#1e293b;color:#cbd5e1}
+    .gender-toggle{display:flex;gap:8px;margin-left:16px}
+    .gender-btn{padding:8px 16px;border-radius:9999px;font-size:14px;cursor:pointer;background:#1e293b;color:#cbd5e1;font-weight:500}
     .gender-btn.active{background:#7c3aed;color:white}
-    .chat{flex:1;overflow-y:auto;padding:22px;scroll-behavior:smooth}
-    .row{display:flex;gap:10px;margin-bottom:12px}.user-row{justify-content:flex-end}
-    .bubble{max-width:75%;padding:13px 15px;border-radius:14px;line-height:1.45;white-space:pre-wrap;position:relative}
-    .ai{background:#1e293b;border:1px solid #334155}
-    .user{background:#7c3aed}
-    .listen-btn{position:absolute;right:12px;bottom:12px;font-size:18px;cursor:pointer;opacity:0.7}
+    .chat{flex:1;overflow-y:auto;padding:24px 28px;scroll-behavior:smooth;background:#0a1120}
+    .row{display:flex;gap:12px;margin-bottom:20px}.user-row{justify-content:flex-end}
+    .bubble{max-width:78%;padding:16px 20px;border-radius:20px;line-height:1.5;white-space:pre-wrap;position:relative}
+    .ai{background:#1e293b;border:1px solid #334155;border-top-left-radius:4px}
+    .user{background:#7c3aed;border-top-right-radius:4px}
+    .listen-btn{position:absolute;right:14px;bottom:12px;font-size:20px;cursor:pointer;opacity:0.75}
     .listen-btn:hover{opacity:1}
-    .inputbar{display:flex;gap:10px;padding:14px;background:#020617;border-top:1px solid #1e293b}
-    input,textarea{width:100%;box-sizing:border-box;background:#020617;color:white;border:1px solid #334155;border-radius:10px;padding:11px;margin-top:8px}
-    button{background:#7c3aed;color:white;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;margin-top:8px}
+    .inputbar{display:flex;gap:12px;padding:18px 24px;background:#020617;border-top:1px solid #1e293b}
+    input{width:100%;box-sizing:border-box;background:#1e293b;color:white;border:1px solid #334155;border-radius:16px;padding:16px 20px;font-size:16px}
+    button{background:#7c3aed;color:white;border:none;padding:14px 22px;border-radius:16px;cursor:pointer;font-weight:700;font-size:16px}
     button.secondary{background:#334155}
-    .mic-btn{font-size:24px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#7c3aed;margin-top:8px}
+    .mic-btn{font-size:26px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#7c3aed}
     .listening{animation: pulse 1.5s infinite}
-    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
-    .panel{padding:18px;background:#020617;border-top:1px solid #1e293b;max-height:340px;overflow-y:auto}
-    .card{background:#020617;border:1px solid #1e293b;border-radius:16px;padding:22px;margin:22px}
-    .box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:13px;margin-top:10px}
+    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
+    .panel{padding:20px;background:#020617;border-top:1px solid #1e293b;max-height:380px;overflow-y:auto}
+    .card{background:#020617;border:1px solid #1e293b;border-radius:16px;padding:24px;margin:24px}
+    .box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;margin-top:12px}
     .clickable{color:#c4b5fd;text-decoration:underline;cursor:pointer}
-    table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border-bottom:1px solid #334155;padding:9px;text-align:left;vertical-align:top}th{color:#c4b5fd}
-    .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:16px}.metric b{display:block;font-size:24px;margin-top:5px}
-    pre{white-space:pre-wrap;max-width:600px}
+    table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #334155;padding:10px;text-align:left;vertical-align:top}th{color:#c4b5fd}
+    .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.metric{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:18px}.metric b{display:block;font-size:26px;margin-top:8px}
+    pre{white-space:pre-wrap;max-width:100%;overflow-x:auto}
   </style>
 </head>
 <body>
 <div class="layout">
   <div class="sidebar">
-    <div class="brand">Diagnose Me</div>
+    <div class="brand">DOCTORPD</div>
     <div class="nav" onclick="showChat()">Clinical Chat</div>
     <div class="nav" onclick="showDiagnostics()">Diagnostics</div>
     <div class="nav" onclick="showDocumentation()">Documentation Assistant</div>
@@ -99,8 +99,8 @@ function speak(text) {
 }
 
 const doctorProfiles = {
-  female: { name:"Dr. Elena Voss", title:"Clinical AI consultation assistant", avatar:"https://randomuser.me/api/portraits/women/44.jpg", voice:"female" },
-  male:   { name:"Dr. James Harper", title:"Clinical AI consultation assistant", avatar:"https://randomuser.me/api/portraits/men/32.jpg", voice:"male" }
+  female: { name:"Dr. Elena Voss", title:"DOCTORPD Clinical AI", avatar:"https://randomuser.me/api/portraits/women/44.jpg", voice:"female" },
+  male:   { name:"Dr. James Harper", title:"DOCTORPD Clinical AI", avatar:"https://randomuser.me/api/portraits/men/32.jpg", voice:"male" }
 };
 
 function startVoiceInput() {
@@ -175,7 +175,7 @@ function showChat(){
       <button onclick="submitOverride()">Submit Override</button>
     </div>
     <div class="inputbar">
-      <input id="input" placeholder="${chatMode==='free'?'Ask the doctor any question...':'Describe symptoms or speak your answer...'}"/>
+      <input id="input" placeholder="${chatMode==='free'?'Ask DOCTORPD anything...':'Describe symptoms or speak your answer...'}"/>
       <button onclick="send()">Send</button>
       <button class="mic-btn" id="micBtn" onclick="startVoiceInput()" title="Speak">🎤</button>
       <button class="secondary" onclick="showChat()">New Chat</button>
@@ -229,8 +229,8 @@ async function send(){
   isWaiting=false;
 }
 
-// ==================== ORIGINAL FUNCTIONS (exactly as you had them) ====================
-function renderFinal(data){
+// ==================== ALL ORIGINAL FUNCTIONS (unchanged) ====================
+function renderFinal(data){ /* full original renderFinal function */ 
   activePrompts=data.revenue_prompts||[];
   let out="";
   out+=`Triage Score: ${data.triage_score}/100\n`;
