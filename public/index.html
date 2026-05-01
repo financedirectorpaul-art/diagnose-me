@@ -58,78 +58,79 @@
 </div>
 
 <script>
-let conversation={symptoms:"",answers:[],questionIndex:0};
-let latestAI=null;
-let documentation=[];
-let activePrompts=[];
-let isWaiting=false;
-let currentDoctor="female";
-let chatMode="guided";
-let messages=[];
-let panelOpen=false;
-let currentImageBase64=null;
+let currentUser = null;
+let currentPatient = null;
+let conversation = {symptoms:"",answers:[],questionIndex:0};
+let latestAI = null;
+let documentation = [];
+let activePrompts = [];
+let isWaiting = false;
+let currentDoctor = "female";
+let chatMode = "guided";
+let currentImageBase64 = null;
+let panelOpen = false;
 
 // Stable Voice Engine
-let voicesLoaded=false;
-let femaleVoice=null;
-let maleVoice=null;
+let voicesLoaded = false;
+let femaleVoice = null;
+let maleVoice = null;
 
-function loadVoices(){
-  const all=speechSynthesis.getVoices();
-  if(all.length===0)return;
-  voicesLoaded=true;
-  femaleVoice=all.find(v=>v.lang==="en-AU"&&/female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name))||all.find(v=>/female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name))||all[0];
-  maleVoice=all.find(v=>v.lang==="en-AU"&&/male|james|david|daniel|oliver|henry/i.test(v.name))||all.find(v=>/male|james|david|daniel|oliver|henry/i.test(v.name))||all[1]||all[0];
+function loadVoices() {
+  const all = speechSynthesis.getVoices();
+  if (all.length === 0) return;
+  voicesLoaded = true;
+  femaleVoice = all.find(v => v.lang === "en-AU" && /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) || all.find(v => /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) || all[0];
+  maleVoice = all.find(v => v.lang === "en-AU" && /male|james|david|daniel|oliver|henry/i.test(v.name)) || all.find(v => /male|james|david|daniel|oliver|henry/i.test(v.name)) || all[1] || all[0];
 }
-if('speechSynthesis'in window){
-  speechSynthesis.onvoiceschanged=loadVoices;
+if ('speechSynthesis' in window) {
+  speechSynthesis.onvoiceschanged = loadVoices;
   loadVoices();
-  setTimeout(loadVoices,800);
+  setTimeout(loadVoices, 800);
 }
 
-function speak(text){
-  if(!('speechSynthesis'in window))return;
-  const utterance=new SpeechSynthesisUtterance(text);
-  const profile=doctorProfiles[currentDoctor];
-  utterance.voice=profile.voice==="female"?femaleVoice:maleVoice;
-  utterance.pitch=profile.voice==="female"?1.1:0.95;
-  utterance.rate=0.97;
-  if(!voicesLoaded){setTimeout(()=>speak(text),600);return;}
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  const profile = doctorProfiles[currentDoctor];
+  utterance.voice = profile.voice === "female" ? femaleVoice : maleVoice;
+  utterance.pitch = profile.voice === "female" ? 1.1 : 0.95;
+  utterance.rate = 0.97;
+  if (!voicesLoaded) { setTimeout(() => speak(text), 600); return; }
   speechSynthesis.speak(utterance);
 }
 
-const doctorProfiles={
-  female:{name:"Dr. Elena Voss",title:"DOCTORPD Clinical AI",avatar:"https://randomuser.me/api/portraits/women/44.jpg",voice:"female"},
-  male:{name:"Dr. James Harper",title:"DOCTORPD Clinical AI",avatar:"https://randomuser.me/api/portraits/men/32.jpg",voice:"male"}
+const doctorProfiles = {
+  female: { name:"Dr. Elena Voss", title:"DOCTORPD Clinical AI", avatar:"https://randomuser.me/api/portraits/women/44.jpg", voice:"female" },
+  male:   { name:"Dr. James Harper", title:"DOCTORPD Clinical AI", avatar:"https://randomuser.me/api/portraits/men/32.jpg", voice:"male" }
 };
 
-function startVoiceInput(){
-  if(!('SpeechRecognition'in window||'webkitSpeechRecognition'in window)){
+function startVoiceInput() {
+  if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
     alert("Voice input not supported in this browser. Please use Chrome or Edge.");
     return;
   }
-  const recognition=new (window.SpeechRecognition||window.webkitSpeechRecognition)();
-  recognition.lang="en-AU";
-  const micBtn=document.getElementById("micBtn");
-  if(micBtn)micBtn.classList.add("listening");
-  recognition.onresult=e=>{
-    const transcript=e.results[0][0].transcript;
-    const input=document.getElementById("input");
-    if(input){input.value=transcript;send();}
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang = "en-AU";
+  const micBtn = document.getElementById("micBtn");
+  if (micBtn) micBtn.classList.add("listening");
+  recognition.onresult = e => {
+    const transcript = e.results[0][0].transcript;
+    const input = document.getElementById("input");
+    if (input) { input.value = transcript; send(); }
   };
-  recognition.onerror=recognition.onend=()=>{if(micBtn)micBtn.classList.remove("listening");};
+  recognition.onerror = recognition.onend = () => { if (micBtn) micBtn.classList.remove("listening"); };
   recognition.start();
 }
 
-function switchDoctor(gender){
-  currentDoctor=gender;
-  document.querySelectorAll('.gender-btn').forEach(b=>b.classList.toggle('active',b.dataset.gender===gender));
+function switchDoctor(gender) {
+  currentDoctor = gender;
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.toggle('active', b.dataset.gender===gender));
   showChat();
 }
 
-function setMode(mode){
-  chatMode=mode;
-  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+function setMode(mode) {
+  chatMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode===mode));
   showChat();
 }
 
@@ -137,17 +138,14 @@ function money(n){return "$"+Number(n||0).toLocaleString();}
 function scrollChat(){const chat=document.getElementById("chat");if(chat)chat.scrollTop=chat.scrollHeight;}
 function copyText(id){navigator.clipboard.writeText(document.getElementById(id).value);alert("Copied");}
 
-function togglePanel(){
-  panelOpen=!panelOpen;
-  const content=document.getElementById("panelContent");
-  if(content)content.style.display=panelOpen?"block":"none";
+function togglePanel() {
+  panelOpen = !panelOpen;
+  const content = document.getElementById("panelContent");
+  if (content) content.style.display = panelOpen ? "block" : "none";
 }
 
 function showChat(){
-  conversation={symptoms:"",answers:[],questionIndex:0};
-  latestAI=null;activePrompts=[];isWaiting=false;
-  messages=[];
-  currentImageBase64=null;
+  if (!currentUser) return showLogin();
   document.getElementById("app").innerHTML=`
     <div class="doctor">
       <div class="avatar"><img src="${doctorProfiles[currentDoctor].avatar}" alt="Doctor"></div>
@@ -260,7 +258,6 @@ async function send(){
   isWaiting=false;
 }
 
-// ==================== ORIGINAL FUNCTIONS ====================
 function renderFinal(data){
   activePrompts=data.revenue_prompts||[];
   let out="";
@@ -391,7 +388,7 @@ async function showAudit(){
   document.getElementById("app").innerHTML=`<div class="card"><h2>Audit Trail</h2><table><tr><th>Time</th><th>Action</th><th>Details</th></tr>${rows.map(r=>`<tr><td>${new Date(r.timestamp).toLocaleString()}</td><td>${r.action}</td><td><pre>${JSON.stringify(r.details,null,2)}</pre></td></tr>`).join("")}</table></div>`;
 }
 
-showChat();
+showLogin();
 </script>
 </body>
 </html>
