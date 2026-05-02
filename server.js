@@ -7,6 +7,7 @@ import OpenAI from "openai";
 dotenv.config();
 
 const app = express();
+
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
@@ -25,7 +26,6 @@ const users = {};
 const cases = [];
 const overrides = [];
 const auditLogs = [];
-
 const rateBucket = new Map();
 
 function now() {
@@ -61,7 +61,6 @@ function simpleRateLimit(req, res, next) {
   }
 
   rateBucket.set(key, count + 1);
-
   if (rateBucket.size > 5000) rateBucket.clear();
 
   next();
@@ -115,7 +114,7 @@ function emergencyTrigger(text = "") {
 function questionsFor(type) {
   const q = {
     cardiac: [
-      "When did the chest discomfort start, and what were you doing at the time?",
+      "What were you doing when the chest discomfort started?",
       "Does the discomfort spread to the arm, jaw, back, neck or shoulder?",
       "Is there shortness of breath, sweating, nausea, dizziness or faintness?",
       "Is it worse with exertion or relieved by rest?",
@@ -125,11 +124,18 @@ function questionsFor(type) {
       "Are you short of breath at rest, or only with activity?",
       "Do you have fever, chills, productive cough, wheeze or chest pain?",
       "What is the oxygen saturation, if known?",
-      "How long have the symptoms been present?",
-      "Any asthma, COPD, heart disease, smoking history or immune suppression?"
+      "Any asthma, COPD, heart disease, smoking history or immune suppression?",
+      "Are symptoms getting better, worse, or staying about the same?"
+    ],
+    musculoskeletal: [
+      "Was there a specific injury, twist, fall, sudden movement or overuse?",
+      "Can the joint move fully, and can weight be borne?",
+      "Is there swelling, redness, warmth, locking, stiffness or instability?",
+      "Did the pain come on suddenly or gradually?",
+      "What makes the pain better or worse?"
     ],
     neurological: [
-      "When did the symptoms start, and were they sudden?",
+      "Did the symptoms start suddenly?",
       "Is there facial droop, slurred speech, weakness, numbness, confusion or vision change?",
       "Is one side of the body affected?",
       "Any seizure, severe headache, loss of consciousness or neck stiffness?",
@@ -137,10 +143,10 @@ function questionsFor(type) {
     ],
     infection: [
       "Is there fever, chills, sweats or feeling very unwell?",
-      "How long have the symptoms been present?",
       "Is there redness, warmth, swelling, pus, rash or worsening pain?",
       "Any confusion, faintness, shortness of breath, fast heart rate or low blood pressure?",
-      "Any diabetes, immune suppression, wound, recent surgery or recent hospital stay?"
+      "Any diabetes, immune suppression, wound, recent surgery or recent hospital stay?",
+      "Are symptoms spreading or worsening?"
     ],
     trauma: [
       "How did the injury happen?",
@@ -149,29 +155,22 @@ function questionsFor(type) {
       "Any numbness, tingling, weakness, coldness, colour change or reduced movement?",
       "Is there an open wound, bleeding or bone visible?"
     ],
-    musculoskeletal: [
-      "When did the pain start?",
-      "Was there an injury, twist, fall, sudden movement or overuse?",
-      "Is there swelling, redness, warmth, locking, stiffness or instability?",
-      "Can the joint move fully, and can weight be borne?",
-      "How severe is the pain from 0 to 10, and what makes it better or worse?"
-    ],
     mental_health: [
-      "How long has the patient felt this way?",
       "Are there thoughts of self-harm or harming someone else?",
       "Is the patient sleeping, eating and functioning normally?",
       "Any hallucinations, panic attacks, substance use or recent major stress?",
-      "Is there someone safe with the patient now?"
+      "Is there someone safe with the patient now?",
+      "Has this been getting worse recently?"
     ],
     gastrointestinal: [
-      "When did the abdominal symptoms start?",
       "Where exactly is the pain located?",
       "Is there vomiting, diarrhoea, fever, blood in stool or severe pain?",
       "Can the patient keep fluids down?",
-      "Any recent travel, new foods, medication changes or known medical conditions?"
+      "Any recent travel, new foods, medication changes or known medical conditions?",
+      "Is the pain constant, cramping, burning or sharp?"
     ],
     general: [
-      "When did symptoms start?",
+      "What is the main symptom troubling you most right now?",
       "How severe are symptoms from 0 to 10?",
       "What makes symptoms better or worse?",
       "Any fever, chest pain, shortness of breath, weakness, vomiting, rash, swelling or severe pain?",
@@ -303,35 +302,83 @@ function cleanJsonText(text = "") {
     .trim();
 }
 
+function isDuplicateQuestion(nextQuestion = "", askedQuestions = []) {
+  const q = String(nextQuestion).toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+  return askedQuestions.some(prev => {
+    const p = String(prev).toLowerCase().replace(/[^\w\s]/g, "").trim();
+
+    if (!p || !q) return false;
+    if (p === q) return true;
+
+    const genericStart =
+      q.includes("when did") &&
+      (p.includes("when did") || p.includes("how long") || p.includes("started"));
+
+    const symptomStart =
+      q.includes("symptom") &&
+      p.includes("symptom") &&
+      (q.includes("start") || p.includes("start"));
+
+    return genericStart || symptomStart;
+  });
+}
+
 async function callClinicalAI(payload) {
   if (!openai) return null;
 
   const system = `
-You are DOCTORPD, a clinical decision-support AI.
+You are DOCTORPD acting as a senior consultant clinician.
 
-Purpose:
-- Assist with triage-style questioning, clinical reasoning, documentation prompts, coding hints and funding documentation opportunities.
-- You are NOT a doctor and must not present output as a diagnosis.
-- Always require clinician review.
-- Escalate immediately for possible emergency red flags.
+You are a clinical decision-support AI, not a doctor. You must not present output as a diagnosis. Always require clinician review.
 
-Critical safety rules:
-- If symptoms suggest immediate danger, return mode "final" with urgency "EMERGENCY".
-- Do not reassure away emergency symptoms.
-- Do not recommend prescription-only medication as a definitive treatment.
-- Do not say the patient is safe.
-- Do not provide a definitive diagnosis.
-- Ask only ONE natural follow-up question at a time if more information is needed.
-- Do not say "Question 1 of 5" or any numbered-question wording.
-- Do not repeat questions already answered.
-- Stop asking questions once there is enough information for a useful preliminary assessment.
-- Usually ask between 3 and 8 adaptive questions depending on complexity, but there is no fixed number.
+You use HYPOTHESIS-DRIVEN CLINICAL REASONING.
 
-Return ONLY valid JSON in this shape:
+At every step:
+1. Form the top 3 likely diagnostic hypotheses.
+2. Assign probability estimates.
+3. Identify what information would most change the probabilities.
+4. Ask ONE best next discriminating question.
+5. Stop asking questions when escalation decision or preliminary assessment is sufficiently clear.
 
+Critical rules:
+- Do NOT ask generic intake questions if already covered.
+- Do NOT ask "when did symptoms start" if timing/onset has already been asked or answered.
+- Do NOT repeat or rephrase previous questions.
+- Do NOT ask low-value questions.
+- Ask one question only.
+- The question must be clinically useful and should differentiate between hypotheses or assess escalation risk.
+- Prioritise dangerous conditions first.
+- If emergency red flags are suggested, finalise with urgency EMERGENCY.
+- Do not say "Question 1 of 5" or any numbering.
+- Do not diagnose definitively.
+- If asking a question, include a brief "reasoning" field explaining why that question matters.
+- If finalising, include full structured output.
+
+Return ONLY valid JSON.
+
+If asking another question:
 {
-  "mode": "question" | "final",
-  "question": "string if mode question",
+  "mode": "question",
+  "question": "single best next discriminating question",
+  "reasoning": "why this question matters",
+  "clinicalState": {
+    "suspectedCategory": "string",
+    "keyFindings": ["string"],
+    "missingCritical": ["string"],
+    "redFlagsChecked": ["string"],
+    "hypotheses": [
+      {"condition": "string", "probability": 0, "reasoning": "string"},
+      {"condition": "string", "probability": 0, "reasoning": "string"},
+      {"condition": "string", "probability": 0, "reasoning": "string"}
+    ]
+  },
+  "legal_notice": "${SAFETY_NOTICE}"
+}
+
+If final:
+{
+  "mode": "final",
   "triage_score": 0,
   "urgency": "Low | Moderate | Moderate to High | High | EMERGENCY",
   "confidence": 0,
@@ -376,6 +423,15 @@ Return ONLY valid JSON in this shape:
       "value": 0
     }
   ],
+  "clinicalState": {
+    "suspectedCategory": "string",
+    "keyFindings": ["string"],
+    "missingCritical": ["string"],
+    "redFlagsChecked": ["string"],
+    "hypotheses": [
+      {"condition": "string", "probability": 0, "reasoning": "string"}
+    ]
+  },
   "advice": "string",
   "legal_notice": "${SAFETY_NOTICE}"
 }
@@ -388,22 +444,28 @@ ${JSON.stringify(payload.patient || {}, null, 2)}
 Initial complaint:
 ${payload.symptoms || ""}
 
-Conversation answers:
-${(payload.answers || []).map((a, i) => `${i + 1}. ${a}`).join("\n")}
+Previous questions already asked:
+${(payload.askedQuestions || []).map(q => `- ${q}`).join("\n") || "None"}
 
-Current user input:
+Previous answers:
+${(payload.answers || []).map((a, i) => `${i + 1}. ${a}`).join("\n") || "None"}
+
+Current clinical state:
+${JSON.stringify(payload.clinicalState || {}, null, 2)}
+
+Latest user input:
 ${payload.currentText || ""}
 
 Image supplied:
 ${payload.imageBase64 ? "Yes" : "No"}
 
 Task:
-Decide whether to ask one further clinical question or provide final preliminary decision-support assessment.
+Think like a senior consultant. Use the current hypotheses, previous questions and answers to either ask ONE high-value discriminating question that has not been asked, or provide the final structured decision-support assessment.
 `;
 
   const completion = await openai.chat.completions.create({
     model: MODEL,
-    temperature: 0.25,
+    temperature: 0.2,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: system },
@@ -422,10 +484,10 @@ async function callFreeChatAI(question, context = {}) {
 You are DOCTORPD, a clinical decision-support assistant.
 
 Respond conversationally and helpfully.
-Do not provide a diagnosis.
+Do not provide a definitive diagnosis.
 Do not claim certainty.
 Escalate emergency red flags.
-If the user asks a general question, answer it clearly and safely.
+If the user asks a general question, answer clearly and safely.
 If clinical detail is missing, ask one useful follow-up question.
 Always include a brief safety reminder when appropriate.
 `;
@@ -455,19 +517,10 @@ ${JSON.stringify(context || {}, null, 2)}
 app.post("/auth/register", (req, res) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password required" });
-  }
+  if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+  if (users[email]) return res.status(400).json({ error: "User already exists" });
 
-  if (users[email]) {
-    return res.status(400).json({ error: "User already exists" });
-  }
-
-  users[email] = {
-    password,
-    patients: [],
-    created_at: now()
-  };
+  users[email] = { password, patients: [], created_at: now() };
 
   audit("REGISTER", { email });
 
@@ -498,9 +551,7 @@ app.get("/patients", (req, res) => {
 app.post("/patients", (req, res) => {
   const { email, name, age, gender } = req.body;
 
-  if (!users[email]) {
-    return res.status(401).json({ error: "Not logged in" });
-  }
+  if (!users[email]) return res.status(401).json({ error: "Not logged in" });
 
   const patient = {
     id: Date.now().toString(),
@@ -524,12 +575,15 @@ app.post("/ai/personal-check", async (req, res) => {
     let {
       symptoms = "",
       answers = [],
+      askedQuestions = [],
+      clinicalState = {},
       currentText = "",
       imageBase64 = "",
       patient = {}
     } = req.body;
 
     if (!Array.isArray(answers)) answers = [];
+    if (!Array.isArray(askedQuestions)) askedQuestions = [];
 
     const combined = `${symptoms} ${answers.join(" ")} ${currentText}`;
     const red = emergencyTrigger(combined);
@@ -553,6 +607,8 @@ app.post("/ai/personal-check", async (req, res) => {
       ai = await callClinicalAI({
         symptoms,
         answers,
+        askedQuestions,
+        clinicalState,
         currentText,
         imageBase64,
         patient
@@ -564,13 +620,17 @@ app.post("/ai/personal-check", async (req, res) => {
     if (!ai || !ai.mode) {
       const type = classify(combined);
       const qs = questionsFor(type);
-      const enoughInfo = answers.length >= 4 || combined.length > 220;
+      const enoughInfo = answers.length >= 5 || combined.length > 260;
 
       if (!enoughInfo) {
-        const next = qs[Math.min(answers.length, qs.length - 1)];
+        let next = qs.find(q => !isDuplicateQuestion(q, askedQuestions));
+        if (!next) next = "What is the main thing that has changed or worsened since this started?";
+
         return res.json({
           mode: "question",
           question: next,
+          reasoning: "Fallback adaptive question selected because AI reasoning was unavailable.",
+          clinicalState,
           legal_notice: SAFETY_NOTICE
         });
       }
@@ -579,10 +639,27 @@ app.post("/ai/personal-check", async (req, res) => {
     }
 
     if (ai.mode === "question") {
-      audit("GUIDED_TRIAGE_QUESTION", { symptoms, answersCount: answers.length, question: ai.question });
+      let nextQuestion = ai.question || "What is the main thing that has changed or worsened since this started?";
+
+      if (isDuplicateQuestion(nextQuestion, askedQuestions)) {
+        const type = classify(combined);
+        const fallback = questionsFor(type).find(q => !isDuplicateQuestion(q, askedQuestions));
+        nextQuestion = fallback || "What new or concerning feature has appeared since the symptoms began?";
+      }
+
+      audit("GUIDED_TRIAGE_QUESTION", {
+        symptoms,
+        answersCount: answers.length,
+        askedCount: askedQuestions.length,
+        question: nextQuestion
+      });
+
       return res.json({
         mode: "question",
-        question: ai.question || "Can you tell me a little more about what is happening?",
+        question: nextQuestion,
+        reasoning: ai.reasoning || "This question helps narrow the likely causes and assess risk.",
+        clinicalState: ai.clinicalState || clinicalState,
+        hypotheses: ai.clinicalState?.hypotheses || ai.hypotheses || clinicalState?.hypotheses || [],
         legal_notice: SAFETY_NOTICE
       });
     }
@@ -765,14 +842,8 @@ app.post("/ai/clinical-assist", async (req, res) => {
       "Document clinician review and plan."
     ],
     funding_prompts: ai?.funding_prompts || [
-      {
-        prompt: "Add objective observations and examination findings.",
-        estimated_uplift: 300
-      },
-      {
-        prompt: "Document comorbidities and functional impact.",
-        estimated_uplift: 250
-      }
+      { prompt: "Add objective observations and examination findings.", estimated_uplift: 300 },
+      { prompt: "Document comorbidities and functional impact.", estimated_uplift: 250 }
     ],
     icd_opportunities: ai?.icd_opportunities || [
       {
@@ -834,15 +905,12 @@ app.post("/pilot/track", (req, res) => {
   };
 
   cases.push(row);
-
   audit("PILOT_TRACK", row);
 
   res.status(201).json({ success: true, case: row });
 });
 
-app.get("/pilot/data", (req, res) => {
-  res.json(cases);
-});
+app.get("/pilot/data", (req, res) => res.json(cases));
 
 app.get("/pilot/metrics", (req, res) => {
   const predicted = cases.reduce((s, c) => s + money(c.predicted), 0);
@@ -866,15 +934,12 @@ app.post("/clinical/override", (req, res) => {
   };
 
   overrides.push(override);
-
   audit("CLINICIAN_OVERRIDE", override);
 
   res.json({ success: true, override });
 });
 
-app.get("/audit/data", (req, res) => {
-  res.json(auditLogs);
-});
+app.get("/audit/data", (req, res) => res.json(auditLogs));
 
 app.get("/gdpr/processing-activities", (req, res) => {
   res.json([
