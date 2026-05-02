@@ -3,11 +3,9 @@ import cors from "cors";
 import path from "path";
 import dotenv from "dotenv";
 import OpenAI from "openai";
-
 dotenv.config();
 
 const app = express();
-
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
@@ -17,7 +15,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(process.cwd(), "public")));
 
 const PORT = process.env.PORT || 10000;
-const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 const SAFETY_NOTICE =
   "Decision support only. Not a diagnosis. Requires clinician review. If symptoms are severe, worsening, or urgent, seek medical care immediately.";
@@ -39,7 +37,6 @@ function audit(action, details = {}) {
     action,
     details
   });
-
   if (auditLogs.length > 1000) auditLogs.shift();
 }
 
@@ -52,25 +49,20 @@ function simpleRateLimit(req, res, next) {
   const minute = Math.floor(Date.now() / 60000);
   const key = `${ip}:${minute}`;
   const count = rateBucket.get(key) || 0;
-
   if (count > 80) {
     return res.status(429).json({
       error: "Too many requests. Please slow down.",
       legal_notice: SAFETY_NOTICE
     });
   }
-
   rateBucket.set(key, count + 1);
   if (rateBucket.size > 5000) rateBucket.clear();
-
   next();
 }
-
 app.use(simpleRateLimit);
 
 function classify(text = "") {
   const t = String(text).toLowerCase();
-
   if (/(chest pain|chest pressure|heart attack|cardiac|palpitations|crushing chest|angina)/.test(t)) return "cardiac";
   if (/(stroke|slurred|facial droop|one sided weakness|weak arm|weak leg|seizure|confusion|vision loss)/.test(t)) return "neurological";
   if (/(can't breathe|cannot breathe|blue lips|shortness of breath|sob|wheeze|pneumonia|low oxygen|hypoxia|cough|flu|cold|sore throat|asthma|copd)/.test(t)) return "respiratory";
@@ -79,35 +71,17 @@ function classify(text = "") {
   if (/(knee|ankle|hip|shoulder|elbow|wrist|joint|muscle|ache|stiff|swelling|locked|strain|sprain|back pain|neck pain|arthritis|sore knee)/.test(t)) return "musculoskeletal";
   if (/(depressed|anxious|panic|suicidal|kill myself|mental health|self harm|self-harm)/.test(t)) return "mental_health";
   if (/(stomach|abdominal|belly|nausea|vomit|diarrhoea|diarrhea|constipation)/.test(t)) return "gastrointestinal";
-
   return "general";
 }
 
 function emergencyTrigger(text = "") {
   const t = String(text).toLowerCase();
-
   const triggers = [
-    "chest pain",
-    "crushing chest",
-    "can't breathe",
-    "cannot breathe",
-    "blue lips",
-    "stroke",
-    "facial droop",
-    "slurred speech",
-    "unconscious",
-    "severe bleeding",
-    "open fracture",
-    "bone visible",
-    "blue foot",
-    "cold foot",
-    "suicidal",
-    "kill myself",
-    "worst headache",
-    "neck stiffness",
-    "new confusion"
+    "chest pain","crushing chest","can't breathe","cannot breathe","blue lips",
+    "stroke","facial droop","slurred speech","unconscious","severe bleeding",
+    "open fracture","bone visible","blue foot","cold foot","suicidal","kill myself",
+    "worst headache","neck stiffness","new confusion"
   ];
-
   return triggers.find(x => t.includes(x));
 }
 
@@ -177,7 +151,6 @@ function questionsFor(type) {
       "Has this happened before, and are there relevant medical conditions?"
     ]
   };
-
   return q[type] || q.general;
 }
 
@@ -193,7 +166,6 @@ function icdFor(type) {
     gastrointestinal: { code: "R10.9", description: "Unspecified abdominal pain", confidence: 55 },
     general: { code: "R69", description: "Illness, unspecified", confidence: 40 }
   };
-
   return map[type] || map.general;
 }
 
@@ -202,7 +174,6 @@ function fallbackAssessment(symptoms, answers = []) {
   const type = classify(combined);
   const red = emergencyTrigger(combined);
   const icd = icdFor(type);
-
   if (red) {
     return {
       mode: "final",
@@ -223,13 +194,11 @@ function fallbackAssessment(symptoms, answers = []) {
       legal_notice: SAFETY_NOTICE
     };
   }
-
   const score =
     type === "cardiac" || type === "neurological" ? 78 :
     type === "respiratory" || type === "infection" || type === "trauma" ? 66 :
     type === "musculoskeletal" ? 52 :
     45;
-
   return {
     mode: "final",
     triage_score: score,
@@ -304,43 +273,28 @@ function cleanJsonText(text = "") {
 
 function isDuplicateQuestion(nextQuestion = "", askedQuestions = []) {
   const q = String(nextQuestion).toLowerCase().replace(/[^\w\s]/g, "").trim();
-
   return askedQuestions.some(prev => {
     const p = String(prev).toLowerCase().replace(/[^\w\s]/g, "").trim();
-
     if (!p || !q) return false;
     if (p === q) return true;
-
-    const genericStart =
-      q.includes("when did") &&
-      (p.includes("when did") || p.includes("how long") || p.includes("started"));
-
-    const symptomStart =
-      q.includes("symptom") &&
-      p.includes("symptom") &&
-      (q.includes("start") || p.includes("start"));
-
+    const genericStart = q.includes("when did") && (p.includes("when did") || p.includes("how long") || p.includes("started"));
+    const symptomStart = q.includes("symptom") && p.includes("symptom") && (q.includes("start") || p.includes("start"));
     return genericStart || symptomStart;
   });
 }
 
 async function callClinicalAI(payload) {
   if (!openai) return null;
-
   const system = `
 You are DOCTORPD acting as a senior consultant clinician.
-
 You are a clinical decision-support AI, not a doctor. You must not present output as a diagnosis. Always require clinician review.
-
 You use HYPOTHESIS-DRIVEN CLINICAL REASONING.
-
 At every step:
 1. Form the top 3 likely diagnostic hypotheses.
 2. Assign probability estimates.
 3. Identify what information would most change the probabilities.
 4. Ask ONE best next discriminating question.
 5. Stop asking questions when escalation decision or preliminary assessment is sufficiently clear.
-
 Critical rules:
 - Do NOT ask generic intake questions if already covered.
 - Do NOT ask "when did symptoms start" if timing/onset has already been asked or answered.
@@ -354,9 +308,7 @@ Critical rules:
 - Do not diagnose definitively.
 - If asking a question, include a brief "reasoning" field explaining why that question matters.
 - If finalising, include full structured output.
-
 Return ONLY valid JSON.
-
 If asking another question:
 {
   "mode": "question",
@@ -375,7 +327,6 @@ If asking another question:
   },
   "legal_notice": "${SAFETY_NOTICE}"
 }
-
 If final:
 {
   "mode": "final",
@@ -436,33 +387,24 @@ If final:
   "legal_notice": "${SAFETY_NOTICE}"
 }
 `;
-
   const user = `
 Patient:
 ${JSON.stringify(payload.patient || {}, null, 2)}
-
 Initial complaint:
 ${payload.symptoms || ""}
-
 Previous questions already asked:
 ${(payload.askedQuestions || []).map(q => `- ${q}`).join("\n") || "None"}
-
 Previous answers:
 ${(payload.answers || []).map((a, i) => `${i + 1}. ${a}`).join("\n") || "None"}
-
 Current clinical state:
 ${JSON.stringify(payload.clinicalState || {}, null, 2)}
-
 Latest user input:
 ${payload.currentText || ""}
-
 Image supplied:
 ${payload.imageBase64 ? "Yes" : "No"}
-
 Task:
 Think like a senior consultant. Use the current hypotheses, previous questions and answers to either ask ONE high-value discriminating question that has not been asked, or provide the final structured decision-support assessment.
 `;
-
   const completion = await openai.chat.completions.create({
     model: MODEL,
     temperature: 0.2,
@@ -472,17 +414,14 @@ Think like a senior consultant. Use the current hypotheses, previous questions a
       { role: "user", content: user }
     ]
   });
-
   const raw = completion.choices?.[0]?.message?.content || "{}";
   return JSON.parse(cleanJsonText(raw));
 }
 
 async function callFreeChatAI(question, context = {}) {
   if (!openai) return null;
-
   const system = `
 You are DOCTORPD, a clinical decision-support assistant.
-
 Respond conversationally and helpfully.
 Do not provide a definitive diagnosis.
 Do not claim certainty.
@@ -491,15 +430,12 @@ If the user asks a general question, answer clearly and safely.
 If clinical detail is missing, ask one useful follow-up question.
 Always include a brief safety reminder when appropriate.
 `;
-
   const user = `
 User question:
 ${question}
-
 Known context:
 ${JSON.stringify(context || {}, null, 2)}
 `;
-
   const completion = await openai.chat.completions.create({
     model: MODEL,
     temperature: 0.35,
@@ -508,51 +444,37 @@ ${JSON.stringify(context || {}, null, 2)}
       { role: "user", content: user }
     ]
   });
-
   return completion.choices?.[0]?.message?.content || "";
 }
 
 // ================= AUTH =================
-
 app.post("/auth/register", (req, res) => {
   const { email, password } = req.body;
-
   if (!email || !password) return res.status(400).json({ error: "Email and password required" });
   if (users[email]) return res.status(400).json({ error: "User already exists" });
-
   users[email] = { password, patients: [], created_at: now() };
-
   audit("REGISTER", { email });
-
   res.json({ success: true });
 });
-
 app.post("/auth/login", (req, res) => {
   const { email, password } = req.body;
-
   if (!users[email] || users[email].password !== password) {
     audit("LOGIN_FAILED", { email });
     return res.status(401).json({ error: "Invalid email or password" });
   }
-
   audit("LOGIN", { email });
-
   res.json({ success: true });
 });
 
 // ================= PATIENTS =================
-
 app.get("/patients", (req, res) => {
   const email = req.query.email;
   if (!users[email]) return res.json([]);
   res.json(users[email].patients);
 });
-
 app.post("/patients", (req, res) => {
   const { email, name, age, gender } = req.body;
-
   if (!users[email]) return res.status(401).json({ error: "Not logged in" });
-
   const patient = {
     id: Date.now().toString(),
     name,
@@ -560,16 +482,12 @@ app.post("/patients", (req, res) => {
     gender,
     createdAt: now()
   };
-
   users[email].patients.push(patient);
-
   audit("CREATE_PATIENT", { email, patient });
-
   res.json(patient);
 });
 
 // ================= GUIDED AI TRIAGE =================
-
 app.post("/ai/personal-check", async (req, res) => {
   try {
     let {
@@ -595,14 +513,11 @@ app.post("/ai/personal-check", async (req, res) => {
       emergency.triage_score = 100;
       emergency.overall_assessment = `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}. Seek urgent medical care immediately.`;
       emergency.legal_notice = SAFETY_NOTICE;
-
       audit("GUIDED_TRIAGE_EMERGENCY", { symptoms, answers, red });
-
       return res.json(emergency);
     }
 
     let ai = null;
-
     try {
       ai = await callClinicalAI({
         symptoms,
@@ -618,42 +533,37 @@ app.post("/ai/personal-check", async (req, res) => {
     }
 
     if (!ai || !ai.mode) {
+      // Clean fallback - no debug message
       const type = classify(combined);
       const qs = questionsFor(type);
       const enoughInfo = answers.length >= 5 || combined.length > 260;
-
       if (!enoughInfo) {
         let next = qs.find(q => !isDuplicateQuestion(q, askedQuestions));
         if (!next) next = "What is the main thing that has changed or worsened since this started?";
-
         return res.json({
           mode: "question",
           question: next,
-          reasoning: "Fallback adaptive question selected because AI reasoning was unavailable.",
+          reasoning: "This question helps narrow the likely causes and assess risk.",
           clinicalState,
           legal_notice: SAFETY_NOTICE
         });
       }
-
       ai = fallbackAssessment(symptoms, answers);
     }
 
     if (ai.mode === "question") {
       let nextQuestion = ai.question || "What is the main thing that has changed or worsened since this started?";
-
       if (isDuplicateQuestion(nextQuestion, askedQuestions)) {
         const type = classify(combined);
         const fallback = questionsFor(type).find(q => !isDuplicateQuestion(q, askedQuestions));
         nextQuestion = fallback || "What new or concerning feature has appeared since the symptoms began?";
       }
-
       audit("GUIDED_TRIAGE_QUESTION", {
         symptoms,
         answersCount: answers.length,
         askedCount: askedQuestions.length,
         question: nextQuestion
       });
-
       return res.json({
         mode: "question",
         question: nextQuestion,
@@ -665,18 +575,15 @@ app.post("/ai/personal-check", async (req, res) => {
     }
 
     ai.legal_notice = SAFETY_NOTICE;
-
     audit("GUIDED_TRIAGE_FINAL", {
       symptoms,
       answersCount: answers.length,
       urgency: ai.urgency,
       triage_score: ai.triage_score
     });
-
     res.json(ai);
   } catch (err) {
     audit("GUIDED_TRIAGE_SERVER_ERROR", { error: err.message });
-
     res.status(500).json({
       mode: "error",
       error: "Unable to process guided triage",
@@ -687,13 +594,11 @@ app.post("/ai/personal-check", async (req, res) => {
 });
 
 // ================= FREE CHAT =================
-
 app.post("/ai/ask-doctor", async (req, res) => {
   try {
     const { question = "", context = {}, imageBase64 = "" } = req.body;
     const combined = `${question} ${JSON.stringify(context || {})}`;
     const red = emergencyTrigger(combined);
-
     if (red) {
       return res.json({
         response:
@@ -701,28 +606,22 @@ app.post("/ai/ask-doctor", async (req, res) => {
           `Please seek urgent medical care immediately.\n\n${SAFETY_NOTICE}`
       });
     }
-
     let response = null;
-
     try {
       response = await callFreeChatAI(question, { ...context, imageSupplied: !!imageBase64 });
     } catch (err) {
       audit("AI_ERROR_FREE_CHAT", { error: err.message });
     }
-
     if (!response) {
       const type = classify(question);
       response =
         `This sounds ${type.replace("_", " ")}-related, but I would need more detail before giving useful decision support.\n\n` +
         `${questionsFor(type)[0]}\n\n${SAFETY_NOTICE}`;
     }
-
     audit("FREE_CHAT", { question, responseLength: response.length });
-
     res.json({ response });
   } catch (err) {
     audit("FREE_CHAT_SERVER_ERROR", { error: err.message });
-
     res.status(500).json({
       response:
         `Sorry, I could not process that safely. Please rephrase or seek clinical help if symptoms are concerning.\n\n${SAFETY_NOTICE}`
@@ -731,13 +630,10 @@ app.post("/ai/ask-doctor", async (req, res) => {
 });
 
 // ================= DIAGNOSTICS =================
-
 app.post("/ai/diagnostics-assist", async (req, res) => {
   const { description = "", imageBase64 = "" } = req.body;
   const type = classify(description);
-
   let aiText = null;
-
   if (openai) {
     try {
       const completion = await openai.chat.completions.create({
@@ -756,13 +652,11 @@ app.post("/ai/diagnostics-assist", async (req, res) => {
           }
         ]
       });
-
       aiText = completion.choices?.[0]?.message?.content || null;
     } catch (err) {
       audit("AI_ERROR_DIAGNOSTICS", { error: err.message });
     }
   }
-
   res.json({
     image_assessment:
       aiText ||
@@ -801,14 +695,11 @@ app.post("/ai/diagnostics-assist", async (req, res) => {
 });
 
 // ================= DOCUMENTATION ASSISTANT =================
-
 app.post("/ai/clinical-assist", async (req, res) => {
   const { note = "" } = req.body;
   const type = classify(note);
   const icd = icdFor(type);
-
   let ai = null;
-
   if (openai) {
     try {
       const completion = await openai.chat.completions.create({
@@ -827,13 +718,11 @@ app.post("/ai/clinical-assist", async (req, res) => {
           }
         ]
       });
-
       ai = JSON.parse(cleanJsonText(completion.choices?.[0]?.message?.content || "{}"));
     } catch (err) {
       audit("AI_ERROR_CLINICAL_ASSIST", { error: err.message });
     }
   }
-
   res.json({
     suggestions: ai?.suggestions || [
       "Document presenting complaint, onset, duration and severity.",
@@ -862,17 +751,14 @@ app.post("/ai/clinical-assist", async (req, res) => {
 });
 
 // ================= FUNDING =================
-
 app.post("/drg/estimate", (req, res) => {
   const { diagnosis = "" } = req.body;
   const type = classify(diagnosis);
-
   const base =
     type === "cardiac" || type === "neurological" ? 3200 :
     type === "trauma" ? 2400 :
     type === "infection" || type === "respiratory" ? 2100 :
     1600;
-
   res.json({
     diagnosis,
     type,
@@ -894,7 +780,6 @@ app.post("/drg/estimate", (req, res) => {
 });
 
 // ================= PILOT TRACKING =================
-
 app.post("/pilot/track", (req, res) => {
   const row = {
     id: Date.now().toString(),
@@ -903,19 +788,14 @@ app.post("/pilot/track", (req, res) => {
     actual: money(req.body.actual),
     created_at: now()
   };
-
   cases.push(row);
   audit("PILOT_TRACK", row);
-
   res.status(201).json({ success: true, case: row });
 });
-
 app.get("/pilot/data", (req, res) => res.json(cases));
-
 app.get("/pilot/metrics", (req, res) => {
   const predicted = cases.reduce((s, c) => s + money(c.predicted), 0);
   const actual = cases.reduce((s, c) => s + money(c.actual), 0);
-
   res.json({
     predicted,
     actual,
@@ -925,22 +805,17 @@ app.get("/pilot/metrics", (req, res) => {
 });
 
 // ================= OVERRIDE / AUDIT / PRIVACY =================
-
 app.post("/clinical/override", (req, res) => {
   const override = {
     id: Date.now().toString(),
     timestamp: now(),
     ...req.body
   };
-
   overrides.push(override);
   audit("CLINICIAN_OVERRIDE", override);
-
   res.json({ success: true, override });
 });
-
 app.get("/audit/data", (req, res) => res.json(auditLogs));
-
 app.get("/gdpr/processing-activities", (req, res) => {
   res.json([
     {
@@ -952,7 +827,6 @@ app.get("/gdpr/processing-activities", (req, res) => {
     }
   ]);
 });
-
 app.get("/gdpr/export", (req, res) => {
   res.json({
     controller: "DOCTORPD",
@@ -963,7 +837,6 @@ app.get("/gdpr/export", (req, res) => {
     auditLogs
   });
 });
-
 app.get("/health", (req, res) => {
   res.json({
     status: "healthy",
@@ -973,11 +846,9 @@ app.get("/health", (req, res) => {
     legal_notice: SAFETY_NOTICE
   });
 });
-
 app.get("*", (req, res) => {
   res.sendFile(path.join(process.cwd(), "public", "index.html"));
 });
-
 app.listen(PORT, () => {
   console.log(`✅ DOCTORPD running on port ${PORT}`);
 });
