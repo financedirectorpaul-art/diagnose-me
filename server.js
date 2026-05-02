@@ -2,121 +2,91 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import dotenv from "dotenv";
+import OpenAI from "openai";
 
 dotenv.config();
 
 const app = express();
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(process.cwd(), "public")));
 
-let users = {};
-let cases = [];
-let overrides = [];
-let auditLogs = [];
+const PORT = process.env.PORT || 10000;
+const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
 const SAFETY_NOTICE =
-  "Decision support only. Not a diagnosis. Requires clinician review. If symptoms are severe or urgent, seek medical care immediately.";
+  "Decision support only. Not a diagnosis. Requires clinician review. If symptoms are severe, worsening, or urgent, seek medical care immediately.";
+
+const users = {};
+const cases = [];
+const overrides = [];
+const auditLogs = [];
+
+const rateBucket = new Map();
 
 function now() {
   return new Date().toISOString();
+}
+
+function audit(action, details = {}) {
+  auditLogs.push({
+    id: Date.now().toString() + Math.random().toString(36).slice(2),
+    timestamp: now(),
+    action,
+    details
+  });
+
+  if (auditLogs.length > 1000) auditLogs.shift();
 }
 
 function money(n) {
   return Number(n || 0);
 }
 
-function classify(text = "") {
-  const t = text.toLowerCase();
+function simpleRateLimit(req, res, next) {
+  const ip = req.ip || req.headers["x-forwarded-for"] || "unknown";
+  const minute = Math.floor(Date.now() / 60000);
+  const key = `${ip}:${minute}`;
+  const count = rateBucket.get(key) || 0;
 
-  if (/(sore throat|throat pain|throat hurts|tonsillitis|pharyngitis|swollen tonsils|difficulty swallowing)/.test(t)) return "respiratory";
-  if (/(cough|runny nose|stuffy nose|sinus|cold|flu|viral|post nasal drip)/.test(t)) return "respiratory";
-  if (/(chest pain|chest pressure|heart attack|cardiac|palpitations|crushing chest)/.test(t)) return "cardiac";
-  if (/(stroke|slurred|facial droop|one sided weakness|weak arm|weak leg|seizure|confusion)/.test(t)) return "neurological";
-  if (/(can't breathe|cannot breathe|blue lips|shortness of breath|sob|wheeze|pneumonia|low oxygen|hypoxia)/.test(t)) return "respiratory";
-  if (/(sepsis|infection|fever|chills|cellulitis|pus|red hot|wound infection)/.test(t)) return "infection";
-  if (/(fracture|broken bone|broken|fall|injury|trauma|twisted|sprain|deformed|open wound|cannot weight bear|can't weight bear|broken arm|broken leg)/.test(t)) return "trauma";
-  if (/(knee|ankle|hip|shoulder|elbow|wrist|joint|muscle|ache|stiff|swelling|locked|strain|sprain|back pain|neck pain|arthritis)/.test(t)) return "musculoskeletal";
-  if (/(depressed|anxious|panic|suicidal|kill myself|mental health|self harm)/.test(t)) return "mental_health";
-  if (/(stomach cramps|stomach pain|abdominal pain|cramps|belly ache|nausea|vomit|diarrhoea|diarrhea)/.test(t)) return "gastrointestinal";
-  if (/(headache|head pain|migraine|dizzy|dizziness|vertigo|lightheaded)/.test(t)) return "general";
+  if (count > 80) {
+    return res.status(429).json({
+      error: "Too many requests. Please slow down.",
+      legal_notice: SAFETY_NOTICE
+    });
+  }
+
+  rateBucket.set(key, count + 1);
+
+  if (rateBucket.size > 5000) rateBucket.clear();
+
+  next();
+}
+
+app.use(simpleRateLimit);
+
+function classify(text = "") {
+  const t = String(text).toLowerCase();
+
+  if (/(chest pain|chest pressure|heart attack|cardiac|palpitations|crushing chest|angina)/.test(t)) return "cardiac";
+  if (/(stroke|slurred|facial droop|one sided weakness|weak arm|weak leg|seizure|confusion|vision loss)/.test(t)) return "neurological";
+  if (/(can't breathe|cannot breathe|blue lips|shortness of breath|sob|wheeze|pneumonia|low oxygen|hypoxia|cough|flu|cold|sore throat|asthma|copd)/.test(t)) return "respiratory";
+  if (/(sepsis|infection|fever|chills|cellulitis|pus|red hot|wound infection|abscess)/.test(t)) return "infection";
+  if (/(fracture|broken bone|broken|fall|injury|trauma|twisted|sprain|deformed|open wound|cannot weight bear|can't weight bear)/.test(t)) return "trauma";
+  if (/(knee|ankle|hip|shoulder|elbow|wrist|joint|muscle|ache|stiff|swelling|locked|strain|sprain|back pain|neck pain|arthritis|sore knee)/.test(t)) return "musculoskeletal";
+  if (/(depressed|anxious|panic|suicidal|kill myself|mental health|self harm|self-harm)/.test(t)) return "mental_health";
+  if (/(stomach|abdominal|belly|nausea|vomit|diarrhoea|diarrhea|constipation)/.test(t)) return "gastrointestinal";
 
   return "general";
 }
 
-function questionsFor(type) {
-  const sets = {
-    respiratory: [
-      "Is there shortness of breath at rest or only with activity?",
-      "Is there fever, chills, productive cough, or chest pain?",
-      "What is the oxygen saturation, if known?",
-      "How long have the symptoms been present?",
-      "Any asthma, COPD, heart disease, smoking history, or immunosuppression?"
-    ],
-    cardiac: [
-      "When did the chest discomfort start?",
-      "Does it radiate to the arm, jaw, back, neck, or shoulder?",
-      "Is there shortness of breath, sweating, nausea, dizziness, or faintness?",
-      "Is it worse with exertion or relieved by rest?",
-      "Any history of heart disease, diabetes, hypertension, high cholesterol, or smoking?"
-    ],
-    neurological: [
-      "When did the symptoms start, and were they sudden?",
-      "Is there facial droop, slurred speech, weakness, numbness, confusion, or vision change?",
-      "Is one side of the body affected?",
-      "Any seizure, severe headache, loss of consciousness, or neck stiffness?",
-      "Are symptoms improving, worsening, or unchanged?"
-    ],
-    infection: [
-      "Is there fever, chills, sweats, or feeling very unwell?",
-      "How long have the symptoms been present?",
-      "Is there redness, warmth, swelling, pus, rash, or worsening pain?",
-      "Any confusion, faintness, shortness of breath, fast heart rate, or low blood pressure?",
-      "Any diabetes, immune suppression, wound, recent surgery, or recent hospital stay?"
-    ],
-    trauma: [
-      "How did the injury happen?",
-      "Can the patient bear weight or use the affected limb?",
-      "Is there deformity, abnormal angling, severe swelling, or bruising?",
-      "Any numbness, tingling, weakness, coldness, colour change, or reduced movement?",
-      "Is there an open wound, bleeding, or bone visible?"
-    ],
-    musculoskeletal: [
-      "When did the pain start?",
-      "Was there an injury, twist, fall, sudden movement, or overuse?",
-      "Is there swelling, redness, warmth, locking, stiffness, or instability?",
-      "Can the joint move fully, and can weight be borne?",
-      "How severe is the pain from 0 to 10, and what makes it better or worse?"
-    ],
-    mental_health: [
-      "How long has the patient felt this way?",
-      "Are there thoughts of self-harm or harming someone else?",
-      "Is the patient sleeping, eating, and functioning normally?",
-      "Any hallucinations, panic attacks, substance use, or recent major stress?",
-      "Is there someone safe with the patient now?"
-    ],
-    gastrointestinal: [
-      "When did the abdominal symptoms start?",
-      "Is there vomiting, diarrhoea, fever, blood in stool, or severe pain?",
-      "Where exactly is the pain located?",
-      "Can the patient keep fluids down?",
-      "Any recent travel, new foods, medication changes, or known medical conditions?"
-    ],
-    general: [
-      "When did symptoms start?",
-      "How severe are symptoms from 0 to 10?",
-      "What makes symptoms better or worse?",
-      "Any fever, chest pain, shortness of breath, weakness, vomiting, rash, swelling, or severe pain?",
-      "Has this happened before, and are there relevant medical conditions?"
-    ]
-  };
-
-  return sets[type] || sets.general;
-}
-
 function emergencyTrigger(text = "") {
-  const t = text.toLowerCase();
+  const t = String(text).toLowerCase();
+
   const triggers = [
     "chest pain",
     "crushing chest",
@@ -133,10 +103,83 @@ function emergencyTrigger(text = "") {
     "blue foot",
     "cold foot",
     "suicidal",
-    "kill myself"
+    "kill myself",
+    "worst headache",
+    "neck stiffness",
+    "new confusion"
   ];
 
   return triggers.find(x => t.includes(x));
+}
+
+function questionsFor(type) {
+  const q = {
+    cardiac: [
+      "When did the chest discomfort start, and what were you doing at the time?",
+      "Does the discomfort spread to the arm, jaw, back, neck or shoulder?",
+      "Is there shortness of breath, sweating, nausea, dizziness or faintness?",
+      "Is it worse with exertion or relieved by rest?",
+      "Any history of heart disease, diabetes, hypertension, high cholesterol or smoking?"
+    ],
+    respiratory: [
+      "Are you short of breath at rest, or only with activity?",
+      "Do you have fever, chills, productive cough, wheeze or chest pain?",
+      "What is the oxygen saturation, if known?",
+      "How long have the symptoms been present?",
+      "Any asthma, COPD, heart disease, smoking history or immune suppression?"
+    ],
+    neurological: [
+      "When did the symptoms start, and were they sudden?",
+      "Is there facial droop, slurred speech, weakness, numbness, confusion or vision change?",
+      "Is one side of the body affected?",
+      "Any seizure, severe headache, loss of consciousness or neck stiffness?",
+      "Are symptoms improving, worsening or unchanged?"
+    ],
+    infection: [
+      "Is there fever, chills, sweats or feeling very unwell?",
+      "How long have the symptoms been present?",
+      "Is there redness, warmth, swelling, pus, rash or worsening pain?",
+      "Any confusion, faintness, shortness of breath, fast heart rate or low blood pressure?",
+      "Any diabetes, immune suppression, wound, recent surgery or recent hospital stay?"
+    ],
+    trauma: [
+      "How did the injury happen?",
+      "Can the patient bear weight or use the affected limb?",
+      "Is there deformity, abnormal angling, severe swelling or bruising?",
+      "Any numbness, tingling, weakness, coldness, colour change or reduced movement?",
+      "Is there an open wound, bleeding or bone visible?"
+    ],
+    musculoskeletal: [
+      "When did the pain start?",
+      "Was there an injury, twist, fall, sudden movement or overuse?",
+      "Is there swelling, redness, warmth, locking, stiffness or instability?",
+      "Can the joint move fully, and can weight be borne?",
+      "How severe is the pain from 0 to 10, and what makes it better or worse?"
+    ],
+    mental_health: [
+      "How long has the patient felt this way?",
+      "Are there thoughts of self-harm or harming someone else?",
+      "Is the patient sleeping, eating and functioning normally?",
+      "Any hallucinations, panic attacks, substance use or recent major stress?",
+      "Is there someone safe with the patient now?"
+    ],
+    gastrointestinal: [
+      "When did the abdominal symptoms start?",
+      "Where exactly is the pain located?",
+      "Is there vomiting, diarrhoea, fever, blood in stool or severe pain?",
+      "Can the patient keep fluids down?",
+      "Any recent travel, new foods, medication changes or known medical conditions?"
+    ],
+    general: [
+      "When did symptoms start?",
+      "How severe are symptoms from 0 to 10?",
+      "What makes symptoms better or worse?",
+      "Any fever, chest pain, shortness of breath, weakness, vomiting, rash, swelling or severe pain?",
+      "Has this happened before, and are there relevant medical conditions?"
+    ]
+  };
+
+  return q[type] || q.general;
 }
 
 function icdFor(type) {
@@ -155,10 +198,11 @@ function icdFor(type) {
   return map[type] || map.general;
 }
 
-function buildAssessment(symptoms, answers = []) {
+function fallbackAssessment(symptoms, answers = []) {
   const combined = `${symptoms || ""} ${answers.join(" ")}`;
   const type = classify(combined);
   const red = emergencyTrigger(combined);
+  const icd = icdFor(type);
 
   if (red) {
     return {
@@ -166,56 +210,50 @@ function buildAssessment(symptoms, answers = []) {
       triage_score: 100,
       urgency: "EMERGENCY",
       confidence: 95,
-      uncertainty: "Low for escalation need; diagnosis still requires clinician review.",
+      uncertainty: "Emergency red flag detected. Diagnosis still requires clinician review.",
       overall_assessment: `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}. Seek urgent medical care immediately.`,
       differential: [],
       conditions: [],
-      icd: icdFor(type),
+      icd,
       cpt: "99285",
       denial_risk: "Low if emergency documentation supports medical necessity",
       missing_information: [],
       funding: { baseline: 1200, potential: 2500, uplift: 1300 },
+      revenue_prompts: [],
       advice: "Escalate immediately. Do not rely on this app for emergency decision-making.",
       legal_notice: SAFETY_NOTICE
     };
   }
 
-  let score = 45;
-  let urgency = "Low to Moderate";
-
-  if (type === "cardiac" || type === "neurological") {
-    score = 75;
-    urgency = "High";
-  } else if (type === "respiratory" || type === "infection" || type === "trauma") {
-    score = 65;
-    urgency = "Moderate to High";
-  } else if (type === "musculoskeletal") {
-    score = 55;
-    urgency = "Moderate";
-  }
-
-  const icd = icdFor(type);
+  const score =
+    type === "cardiac" || type === "neurological" ? 78 :
+    type === "respiratory" || type === "infection" || type === "trauma" ? 66 :
+    type === "musculoskeletal" ? 52 :
+    45;
 
   return {
     mode: "final",
     triage_score: score,
-    urgency,
-    confidence: 68,
-    uncertainty: "Moderate. This is symptom-based decision support and needs clinician review.",
-    overall_assessment: `Based on the information provided, this appears most consistent with a ${type.replace("_", " ")} presentation. There are no automatic emergency red flags detected in the information entered, but clinical review is still required.`,
+    urgency: score >= 75 ? "High" : score >= 60 ? "Moderate to High" : "Moderate",
+    confidence: 62,
+    uncertainty: "Moderate. This is symptom-based decision support and requires clinician review.",
+    overall_assessment:
+      `Based on the information provided, this appears most consistent with a ${type.replace("_", " ")} presentation. No automatic emergency trigger was detected in the entered text, but clinical review is still required.`,
     differential: [
       {
         rank: 1,
         condition: `${type.replace("_", " ")} condition`,
         probability: 55,
         likelihood: "Possible",
+        reasoning: "The symptom wording and answers align with this category.",
         icd_suggestion: icd
       },
       {
         rank: 2,
         condition: "Non-specific acute illness or injury",
-        probability: 30,
+        probability: 25,
         likelihood: "Possible",
+        reasoning: "More detail and examination findings are needed.",
         icd_suggestion: { code: "R69", description: "Illness, unspecified" }
       }
     ],
@@ -223,7 +261,7 @@ function buildAssessment(symptoms, answers = []) {
       {
         name: `${type.replace("_", " ")} presentation`,
         likelihood: "Possible",
-        reason: "The symptom wording and answers align with this category."
+        reason: "Suggested by symptom category."
       }
     ],
     icd,
@@ -256,6 +294,162 @@ function buildAssessment(symptoms, answers = []) {
   };
 }
 
+function cleanJsonText(text = "") {
+  return String(text)
+    .trim()
+    .replace(/^```json/i, "")
+    .replace(/^```/i, "")
+    .replace(/```$/i, "")
+    .trim();
+}
+
+async function callClinicalAI(payload) {
+  if (!openai) return null;
+
+  const system = `
+You are DOCTORPD, a clinical decision-support AI.
+
+Purpose:
+- Assist with triage-style questioning, clinical reasoning, documentation prompts, coding hints and funding documentation opportunities.
+- You are NOT a doctor and must not present output as a diagnosis.
+- Always require clinician review.
+- Escalate immediately for possible emergency red flags.
+
+Critical safety rules:
+- If symptoms suggest immediate danger, return mode "final" with urgency "EMERGENCY".
+- Do not reassure away emergency symptoms.
+- Do not recommend prescription-only medication as a definitive treatment.
+- Do not say the patient is safe.
+- Do not provide a definitive diagnosis.
+- Ask only ONE natural follow-up question at a time if more information is needed.
+- Do not say "Question 1 of 5" or any numbered-question wording.
+- Do not repeat questions already answered.
+- Stop asking questions once there is enough information for a useful preliminary assessment.
+- Usually ask between 3 and 8 adaptive questions depending on complexity, but there is no fixed number.
+
+Return ONLY valid JSON in this shape:
+
+{
+  "mode": "question" | "final",
+  "question": "string if mode question",
+  "triage_score": 0,
+  "urgency": "Low | Moderate | Moderate to High | High | EMERGENCY",
+  "confidence": 0,
+  "uncertainty": "string",
+  "overall_assessment": "string",
+  "differential": [
+    {
+      "rank": 1,
+      "condition": "string",
+      "probability": 0,
+      "likelihood": "Unlikely | Possible | Likely",
+      "reasoning": "string",
+      "icd_suggestion": {
+        "code": "string",
+        "description": "string"
+      }
+    }
+  ],
+  "conditions": [
+    {
+      "name": "string",
+      "likelihood": "string",
+      "reason": "string"
+    }
+  ],
+  "icd": {
+    "code": "string",
+    "description": "string",
+    "confidence": 0
+  },
+  "cpt": "string",
+  "denial_risk": "Low | Moderate | High",
+  "missing_information": ["string"],
+  "funding": {
+    "baseline": 0,
+    "potential": 0,
+    "uplift": 0
+  },
+  "revenue_prompts": [
+    {
+      "message": "string",
+      "value": 0
+    }
+  ],
+  "advice": "string",
+  "legal_notice": "${SAFETY_NOTICE}"
+}
+`;
+
+  const user = `
+Patient:
+${JSON.stringify(payload.patient || {}, null, 2)}
+
+Initial complaint:
+${payload.symptoms || ""}
+
+Conversation answers:
+${(payload.answers || []).map((a, i) => `${i + 1}. ${a}`).join("\n")}
+
+Current user input:
+${payload.currentText || ""}
+
+Image supplied:
+${payload.imageBase64 ? "Yes" : "No"}
+
+Task:
+Decide whether to ask one further clinical question or provide final preliminary decision-support assessment.
+`;
+
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    temperature: 0.25,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ]
+  });
+
+  const raw = completion.choices?.[0]?.message?.content || "{}";
+  return JSON.parse(cleanJsonText(raw));
+}
+
+async function callFreeChatAI(question, context = {}) {
+  if (!openai) return null;
+
+  const system = `
+You are DOCTORPD, a clinical decision-support assistant.
+
+Respond conversationally and helpfully.
+Do not provide a diagnosis.
+Do not claim certainty.
+Escalate emergency red flags.
+If the user asks a general question, answer it clearly and safely.
+If clinical detail is missing, ask one useful follow-up question.
+Always include a brief safety reminder when appropriate.
+`;
+
+  const user = `
+User question:
+${question}
+
+Known context:
+${JSON.stringify(context || {}, null, 2)}
+`;
+
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    temperature: 0.35,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ]
+  });
+
+  return completion.choices?.[0]?.message?.content || "";
+}
+
 // ================= AUTH =================
 
 app.post("/auth/register", (req, res) => {
@@ -269,13 +463,13 @@ app.post("/auth/register", (req, res) => {
     return res.status(400).json({ error: "User already exists" });
   }
 
-  users[email] = { password, patients: [] };
+  users[email] = {
+    password,
+    patients: [],
+    created_at: now()
+  };
 
-  auditLogs.push({
-    timestamp: now(),
-    action: "REGISTER",
-    details: { email }
-  });
+  audit("REGISTER", { email });
 
   res.json({ success: true });
 });
@@ -284,14 +478,11 @@ app.post("/auth/login", (req, res) => {
   const { email, password } = req.body;
 
   if (!users[email] || users[email].password !== password) {
+    audit("LOGIN_FAILED", { email });
     return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  auditLogs.push({
-    timestamp: now(),
-    action: "LOGIN",
-    details: { email }
-  });
+  audit("LOGIN", { email });
 
   res.json({ success: true });
 });
@@ -300,9 +491,7 @@ app.post("/auth/login", (req, res) => {
 
 app.get("/patients", (req, res) => {
   const email = req.query.email;
-
   if (!users[email]) return res.json([]);
-
   res.json(users[email].patients);
 });
 
@@ -323,61 +512,94 @@ app.post("/patients", (req, res) => {
 
   users[email].patients.push(patient);
 
-  auditLogs.push({
-    timestamp: now(),
-    action: "CREATE_PATIENT",
-    details: { email, patient }
-  });
+  audit("CREATE_PATIENT", { email, patient });
 
   res.json(patient);
 });
 
-// ================= GUIDED TRIAGE =================
+// ================= GUIDED AI TRIAGE =================
 
 app.post("/ai/personal-check", async (req, res) => {
   try {
-    let { symptoms = "", answers = [], questionIndex = 0 } = req.body;
+    let {
+      symptoms = "",
+      answers = [],
+      currentText = "",
+      imageBase64 = "",
+      patient = {}
+    } = req.body;
 
     if (!Array.isArray(answers)) answers = [];
 
-    const combined = `${symptoms} ${answers.join(" ")}`;
-    const type = classify(combined);
+    const combined = `${symptoms} ${answers.join(" ")} ${currentText}`;
     const red = emergencyTrigger(combined);
 
     if (red) {
-      const emergency = buildAssessment(symptoms, answers);
-      auditLogs.push({
-        timestamp: now(),
-        action: "GUIDED_TRIAGE_EMERGENCY",
-        details: { symptoms, answers, emergency }
-      });
+      const emergency = fallbackAssessment(combined, answers);
+      emergency.mode = "final";
+      emergency.urgency = "EMERGENCY";
+      emergency.triage_score = 100;
+      emergency.overall_assessment = `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}. Seek urgent medical care immediately.`;
+      emergency.legal_notice = SAFETY_NOTICE;
+
+      audit("GUIDED_TRIAGE_EMERGENCY", { symptoms, answers, red });
+
       return res.json(emergency);
     }
 
-    const qs = questionsFor(type);
+    let ai = null;
 
-    if (questionIndex < qs.length) {
+    try {
+      ai = await callClinicalAI({
+        symptoms,
+        answers,
+        currentText,
+        imageBase64,
+        patient
+      });
+    } catch (err) {
+      audit("AI_ERROR_GUIDED", { error: err.message });
+    }
+
+    if (!ai || !ai.mode) {
+      const type = classify(combined);
+      const qs = questionsFor(type);
+      const enoughInfo = answers.length >= 4 || combined.length > 220;
+
+      if (!enoughInfo) {
+        const next = qs[Math.min(answers.length, qs.length - 1)];
+        return res.json({
+          mode: "question",
+          question: next,
+          legal_notice: SAFETY_NOTICE
+        });
+      }
+
+      ai = fallbackAssessment(symptoms, answers);
+    }
+
+    if (ai.mode === "question") {
+      audit("GUIDED_TRIAGE_QUESTION", { symptoms, answersCount: answers.length, question: ai.question });
       return res.json({
         mode: "question",
-        question: qs[questionIndex],
-        questionIndex,
-        totalQuestions: qs.length,
-        urgency: "Pending",
-        triage_score: 0,
+        question: ai.question || "Can you tell me a little more about what is happening?",
         legal_notice: SAFETY_NOTICE
       });
     }
 
-    const final = buildAssessment(symptoms, answers);
+    ai.legal_notice = SAFETY_NOTICE;
 
-    auditLogs.push({
-      timestamp: now(),
-      action: "GUIDED_TRIAGE_FINAL",
-      details: { symptoms, answers, final }
+    audit("GUIDED_TRIAGE_FINAL", {
+      symptoms,
+      answersCount: answers.length,
+      urgency: ai.urgency,
+      triage_score: ai.triage_score
     });
 
-    res.json(final);
+    res.json(ai);
   } catch (err) {
+    audit("GUIDED_TRIAGE_SERVER_ERROR", { error: err.message });
+
     res.status(500).json({
       mode: "error",
       error: "Unable to process guided triage",
@@ -391,60 +613,85 @@ app.post("/ai/personal-check", async (req, res) => {
 
 app.post("/ai/ask-doctor", async (req, res) => {
   try {
-    const { question = "", context = {} } = req.body;
-
-    const priorSymptoms = context?.symptoms || "";
-    const priorAnswers = Array.isArray(context?.answers) ? context.answers.join(" ") : "";
-
-    const combined = `${priorSymptoms} ${priorAnswers} ${question}`;
-    const type = classify(combined);
+    const { question = "", context = {}, imageBase64 = "" } = req.body;
+    const combined = `${question} ${JSON.stringify(context || {})}`;
     const red = emergencyTrigger(combined);
 
     if (red) {
       return res.json({
-        response: `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}.\n\nPlease seek urgent medical care immediately.\n\n${SAFETY_NOTICE}`
+        response:
+          `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}.\n\n` +
+          `Please seek urgent medical care immediately.\n\n${SAFETY_NOTICE}`
       });
     }
 
-    let response = "";
+    let response = null;
 
-    if (/cure|treatment|treat|what can i do|help/i.test(question)) {
+    try {
+      response = await callFreeChatAI(question, { ...context, imageSupplied: !!imageBase64 });
+    } catch (err) {
+      audit("AI_ERROR_FREE_CHAT", { error: err.message });
+    }
+
+    if (!response) {
+      const type = classify(question);
       response =
-        `This sounds ${type.replace("_", " ")}-related.\n\n` +
-        `General treatment depends on the cause, severity, duration, age, medical history and examination findings. A clinician would usually confirm the diagnosis, assess red flags, and then consider options such as self-care, medication, imaging, pathology, physiotherapy, referral, or urgent escalation depending on the presentation.\n\n` +
-        `To narrow this down: ${questionsFor(type)[0]}\n\n${SAFETY_NOTICE}`;
-    } else {
-      response =
-        `Based on what you've said, this sounds ${type.replace("_", " ")}-related.\n\n` +
+        `This sounds ${type.replace("_", " ")}-related, but I would need more detail before giving useful decision support.\n\n` +
         `${questionsFor(type)[0]}\n\n${SAFETY_NOTICE}`;
     }
 
-    auditLogs.push({
-      timestamp: now(),
-      action: "FREE_CHAT",
-      details: { question, type }
-    });
+    audit("FREE_CHAT", { question, responseLength: response.length });
 
     res.json({ response });
   } catch (err) {
+    audit("FREE_CHAT_SERVER_ERROR", { error: err.message });
+
     res.status(500).json({
-      response: `Sorry, I could not process that question safely.\n\n${SAFETY_NOTICE}`,
-      error: err.message
+      response:
+        `Sorry, I could not process that safely. Please rephrase or seek clinical help if symptoms are concerning.\n\n${SAFETY_NOTICE}`
     });
   }
 });
 
 // ================= DIAGNOSTICS =================
 
-app.post("/ai/diagnostics-assist", (req, res) => {
+app.post("/ai/diagnostics-assist", async (req, res) => {
   const { description = "", imageBase64 = "" } = req.body;
-
   const type = classify(description);
 
+  let aiText = null;
+
+  if (openai) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: MODEL,
+        temperature: 0.25,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a clinical documentation and diagnostic support assistant. You do not diagnose. Provide cautious decision support, red flags, and recommended next steps."
+          },
+          {
+            role: "user",
+            content:
+              `Description: ${description}\nImage supplied: ${imageBase64 ? "yes" : "no"}\nProvide a concise image/diagnostic decision-support summary.`
+          }
+        ]
+      });
+
+      aiText = completion.choices?.[0]?.message?.content || null;
+    } catch (err) {
+      audit("AI_ERROR_DIAGNOSTICS", { error: err.message });
+    }
+  }
+
   res.json({
-    image_assessment: imageBase64
-      ? "Image received. A clinician should review image quality, anatomical site, visible abnormality, and red flags."
-      : "No image supplied. Assessment is based on the description only.",
+    image_assessment:
+      aiText ||
+      (imageBase64
+        ? "Image received. A clinician should review image quality, anatomical site, visible abnormality, and red flags."
+        : "No image supplied. Assessment is based on the description only."),
     triage: {
       score: type === "trauma" ? 70 : 50,
       urgency: type === "trauma" ? "Moderate to High" : "Moderate"
@@ -458,7 +705,10 @@ app.post("/ai/diagnostics-assist", (req, res) => {
     recommended_diagnostics: {
       imaging: [
         {
-          test: type === "trauma" ? "X-ray if fracture, deformity, severe pain or inability to use limb" : "Clinician-directed imaging if indicated",
+          test:
+            type === "trauma"
+              ? "X-ray if fracture, deformity, severe pain or inability to use limb"
+              : "Clinician-directed imaging if indicated",
           reason: "To confirm or exclude structural pathology where clinically appropriate."
         }
       ],
@@ -475,18 +725,46 @@ app.post("/ai/diagnostics-assist", (req, res) => {
 
 // ================= DOCUMENTATION ASSISTANT =================
 
-app.post("/ai/clinical-assist", (req, res) => {
+app.post("/ai/clinical-assist", async (req, res) => {
   const { note = "" } = req.body;
   const type = classify(note);
+  const icd = icdFor(type);
+
+  let ai = null;
+
+  if (openai) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: MODEL,
+        temperature: 0.25,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a clinical documentation integrity assistant. Return JSON only with suggestions, funding_prompts, icd_opportunities and audit_risks."
+          },
+          {
+            role: "user",
+            content: `Analyse this note for documentation gaps, coding opportunities and audit risks:\n${note}`
+          }
+        ]
+      });
+
+      ai = JSON.parse(cleanJsonText(completion.choices?.[0]?.message?.content || "{}"));
+    } catch (err) {
+      audit("AI_ERROR_CLINICAL_ASSIST", { error: err.message });
+    }
+  }
 
   res.json({
-    suggestions: [
+    suggestions: ai?.suggestions || [
       "Document presenting complaint, onset, duration and severity.",
       "Include relevant positives and negatives.",
       "Record observations, examination findings and escalation decisions.",
       "Document clinician review and plan."
     ],
-    funding_prompts: [
+    funding_prompts: ai?.funding_prompts || [
       {
         prompt: "Add objective observations and examination findings.",
         estimated_uplift: 300
@@ -496,14 +774,14 @@ app.post("/ai/clinical-assist", (req, res) => {
         estimated_uplift: 250
       }
     ],
-    icd_opportunities: [
+    icd_opportunities: ai?.icd_opportunities || [
       {
-        indicative_code: icdFor(type).code,
-        description: icdFor(type).description,
+        indicative_code: icd.code,
+        description: icd.description,
         documentation_needed: "Confirm diagnosis clinically and document supporting findings."
       }
     ],
-    audit_risks: [
+    audit_risks: ai?.audit_risks || [
       "Diagnosis unsupported by examination findings.",
       "Missing severity, duration or relevant negative findings.",
       "No clear clinician review statement."
@@ -512,24 +790,39 @@ app.post("/ai/clinical-assist", (req, res) => {
   });
 });
 
-// ================= FUNDING / PILOT =================
+// ================= FUNDING =================
 
 app.post("/drg/estimate", (req, res) => {
   const { diagnosis = "" } = req.body;
   const type = classify(diagnosis);
 
-  const base = type === "cardiac" || type === "neurological" ? 3200 : type === "trauma" ? 2400 : 1600;
+  const base =
+    type === "cardiac" || type === "neurological" ? 3200 :
+    type === "trauma" ? 2400 :
+    type === "infection" || type === "respiratory" ? 2100 :
+    1600;
 
   res.json({
     diagnosis,
     type,
     funding: base,
+    baseline: Math.round(base * 0.75),
+    potential: base,
+    uplift: Math.round(base * 0.25),
+    documentation_needed: [
+      "Principal diagnosis clearly supported",
+      "Comorbidities documented",
+      "Severity and complexity documented",
+      "Investigations and treatment plan recorded"
+    ],
     assumptions: [
       "Indicative only.",
       "Final funding depends on coded episode, documentation, classification and local rules."
     ]
   });
 });
+
+// ================= PILOT TRACKING =================
 
 app.post("/pilot/track", (req, res) => {
   const row = {
@@ -542,11 +835,7 @@ app.post("/pilot/track", (req, res) => {
 
   cases.push(row);
 
-  auditLogs.push({
-    timestamp: now(),
-    action: "PILOT_TRACK",
-    details: row
-  });
+  audit("PILOT_TRACK", row);
 
   res.status(201).json({ success: true, case: row });
 });
@@ -567,7 +856,7 @@ app.get("/pilot/metrics", (req, res) => {
   });
 });
 
-// ================= OVERRIDE / AUDIT / GDPR =================
+// ================= OVERRIDE / AUDIT / PRIVACY =================
 
 app.post("/clinical/override", (req, res) => {
   const override = {
@@ -578,11 +867,7 @@ app.post("/clinical/override", (req, res) => {
 
   overrides.push(override);
 
-  auditLogs.push({
-    timestamp: now(),
-    action: "CLINICIAN_OVERRIDE",
-    details: override
-  });
+  audit("CLINICIAN_OVERRIDE", override);
 
   res.json({ success: true, override });
 });
@@ -595,8 +880,10 @@ app.get("/gdpr/processing-activities", (req, res) => {
   res.json([
     {
       activity: "Clinical decision support",
-      lawful_basis: "User-entered demonstration data",
-      retention: "In-memory only in this prototype"
+      data_categories: ["User-entered patient details", "Symptoms", "AI outputs", "Audit logs"],
+      lawful_basis: "Prototype / demonstration use only",
+      retention: "In-memory only in this prototype",
+      safeguards: ["No database persistence in this version", "Audit logging", "Safety notices"]
     }
   ]);
 });
@@ -616,6 +903,8 @@ app.get("/health", (req, res) => {
   res.json({
     status: "healthy",
     time: now(),
+    ai_enabled: !!openai,
+    model: MODEL,
     legal_notice: SAFETY_NOTICE
   });
 });
@@ -623,8 +912,6 @@ app.get("/health", (req, res) => {
 app.get("*", (req, res) => {
   res.sendFile(path.join(process.cwd(), "public", "index.html"));
 });
-
-const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
   console.log(`✅ DOCTORPD running on port ${PORT}`);
