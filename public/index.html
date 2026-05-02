@@ -303,6 +303,16 @@
       margin-top:14px;
     }
 
+    .hypothesis-box {
+      background:#111827;
+      border:1px solid #4c1d95;
+      border-radius:14px;
+      padding:14px;
+      margin-top:12px;
+      font-size:14px;
+      color:#ddd6fe;
+    }
+
     table {
       width:100%;
       border-collapse:collapse;
@@ -334,31 +344,12 @@
       margin-top:8px;
     }
 
-    .clickable {
-      cursor:pointer;
-      color:#c4b5fd;
-    }
-
     @media(max-width:900px) {
-      .layout {
-        grid-template-columns:1fr;
-      }
-
-      .sidebar {
-        display:none;
-      }
-
-      .mode-toggle {
-        margin-left:0;
-      }
-
-      .bubble {
-        max-width:92%;
-      }
-
-      .inputbar {
-        flex-wrap:wrap;
-      }
+      .layout { grid-template-columns:1fr; }
+      .sidebar { display:none; }
+      .mode-toggle { margin-left:0; }
+      .bubble { max-width:92%; }
+      .inputbar { flex-wrap:wrap; }
     }
   </style>
 </head>
@@ -388,7 +379,15 @@ let currentPatient = null;
 
 let conversation = {
   symptoms: "",
-  answers: []
+  answers: [],
+  askedQuestions: [],
+  clinicalState: {
+    suspectedCategory: null,
+    keyFindings: [],
+    missingCritical: [],
+    redFlagsChecked: [],
+    hypotheses: []
+  }
 };
 
 let latestAI = null;
@@ -447,7 +446,15 @@ function copyText(id) {
 function resetConversation() {
   conversation = {
     symptoms: "",
-    answers: []
+    answers: [],
+    askedQuestions: [],
+    clinicalState: {
+      suspectedCategory: null,
+      keyFindings: [],
+      missingCritical: [],
+      redFlagsChecked: [],
+      hypotheses: []
+    }
   };
 
   latestAI = null;
@@ -460,7 +467,6 @@ function loadVoices() {
   if (!("speechSynthesis" in window)) return;
 
   const all = speechSynthesis.getVoices();
-
   if (all.length === 0) return;
 
   voicesLoaded = true;
@@ -489,7 +495,6 @@ function speak(text) {
   if (!voicesLoaded) loadVoices();
 
   const clean = String(text || "").replace(/<[^>]*>/g, "");
-
   const utterance = new SpeechSynthesisUtterance(clean);
   const profile = doctorProfiles[currentDoctor];
 
@@ -823,6 +828,31 @@ function addAI(text) {
   }
 }
 
+function addHypothesesBox(hypotheses = [], reasoning = "") {
+  if (!hypotheses.length && !reasoning) return;
+
+  const chat = document.getElementById("chat");
+  if (!chat) return;
+
+  let html = `<div class="row"><div class="hypothesis-box">`;
+
+  if (reasoning) {
+    html += `<strong>Why I’m asking:</strong><br>${escapeHtml(reasoning)}<br><br>`;
+  }
+
+  if (hypotheses.length) {
+    html += `<strong>Current working hypotheses:</strong><br>`;
+    hypotheses.slice(0, 3).forEach(h => {
+      html += `• ${escapeHtml(h.condition || "Condition")} — ${escapeHtml(h.probability ?? "N/A")}%<br>`;
+    });
+  }
+
+  html += `</div></div>`;
+
+  chat.innerHTML += html;
+  scrollChat();
+}
+
 function addUser(text) {
   const chat = document.getElementById("chat");
   if (!chat) return;
@@ -904,9 +934,34 @@ async function send() {
 
       if (data.mode === "question") {
         latestAI = data;
+
+        if (data.question) {
+          conversation.askedQuestions.push(data.question);
+        }
+
+        if (data.clinicalState) {
+          conversation.clinicalState = {
+            ...conversation.clinicalState,
+            ...data.clinicalState
+          };
+        }
+
+        if (data.hypotheses?.length) {
+          conversation.clinicalState.hypotheses = data.hypotheses;
+        }
+
         addAI(data.question || "Can you tell me a little more?");
+        addHypothesesBox(conversation.clinicalState.hypotheses || [], data.reasoning || "");
       } else if (data.mode === "final") {
         latestAI = data;
+
+        if (data.clinicalState) {
+          conversation.clinicalState = {
+            ...conversation.clinicalState,
+            ...data.clinicalState
+          };
+        }
+
         renderFinal(data);
       } else {
         addAI(data.overall_assessment || data.error || "Sorry, I couldn't process that.");
@@ -986,7 +1041,7 @@ function renderFinal(data) {
   if (activePrompts.length) {
     let htmlText = "Documentation Opportunities:\n";
 
-    activePrompts.forEach((p, i) => {
+    activePrompts.forEach(p => {
       htmlText += `• ${p.message} → ${money(p.value || p.estimated_uplift)}\n`;
       documentation.push(`${p.message} → ${money(p.value || p.estimated_uplift)}`);
     });
@@ -1005,6 +1060,12 @@ ${conversation.symptoms || "Not recorded"}
 
 RESPONSES:
 ${conversation.answers.join("\n") || "Not recorded"}
+
+QUESTIONS ASKED:
+${conversation.askedQuestions.join("\n") || "Not recorded"}
+
+CURRENT HYPOTHESES:
+${(conversation.clinicalState?.hypotheses || []).map(h => `${h.condition} — ${h.probability}%`).join("\n") || "Not recorded"}
 
 ASSESSMENT:
 ${latestAI?.overall_assessment || "Not recorded"}
