@@ -143,14 +143,13 @@ function resetConversation(){
   currentImageBase64 = null;
 }
 
-function addUnique(arr, value){
+function addUnique(arr,value){
   if(!value)return;
   if(!arr.includes(value))arr.push(value);
 }
 
 function updateFactsFromText(text){
   const t = String(text || "").toLowerCase();
-
   if(!t)return;
 
   if (/(twist|twisted|fell|fall|slipped|collision|tackle|hockey|sport|sports|landed|injury|injured|overuse|running|jumped)/.test(t)) {
@@ -163,7 +162,7 @@ function updateFactsFromText(text){
     addUnique(conversation.clinicalState.keyFindings, "timing/onset described");
   }
 
-  if (/(can't walk|cant walk|cannot walk|couldn't walk|couldnt walk|can walk|walking|walked|bear weight|weight bear|limp|limping|stood up|stand on it)/.test(t)) {
+  if (/(can't walk|cant walk|cannot walk|couldn't walk|couldnt walk|can walk|walking|walked|bear weight|weight bear|limp|limping|stood up|stand on it|continue playing|kept playing|stopped playing)/.test(t)) {
     conversation.facts.weightBearingKnown = true;
     addUnique(conversation.clinicalState.keyFindings, "weight-bearing status described");
   }
