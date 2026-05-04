@@ -72,16 +72,41 @@ app.use(simpleRateLimit);
 function classify(text = "") {
   const t = String(text).toLowerCase();
 
-  if (/(chest pain|chest pressure|heart attack|cardiac|palpitations|crushing chest|angina)/.test(t)) return "cardiac";
-  if (/(stroke|slurred|facial droop|one sided weakness|weak arm|weak leg|seizure|confusion|vision loss)/.test(t)) return "neurological";
-  if (/(can't breathe|cannot breathe|blue lips|shortness of breath|sob|wheeze|pneumonia|low oxygen|hypoxia|cough|flu|cold|sore throat|asthma|copd)/.test(t)) return "respiratory";
-  if (/(sepsis|infection|fever|chills|cellulitis|pus|red hot|wound infection|abscess)/.test(t)) return "infection";
+  if (/(diabetes|type 2|type two|prediabetes|blood sugar|glucose|hba1c|insulin resistance)/.test(t)) return "diabetes";
+  if (/(chest pain|chest pressure|heart attack|cardiac|palpitations|crushing chest|angina|heart|tight chest)/.test(t)) return "cardiac";
+  if (/(stroke|slurred|facial droop|one sided weakness|weak arm|weak leg|seizure|confusion|vision loss|headache|migraine|dizzy|vertigo|numb|tingling|weakness|blackout|vision)/.test(t)) return "neurological";
+  if (/(can't breathe|cannot breathe|blue lips|shortness of breath|sob|wheeze|pneumonia|low oxygen|hypoxia|cough|flu|cold|sore throat|asthma|copd|breathing)/.test(t)) return "respiratory";
+  if (/(sepsis|infection|fever|chills|cellulitis|pus|red hot|wound infection|abscess|sweats|very unwell|virus|fatigue)/.test(t)) return "infection";
   if (/(fracture|broken bone|broken|fall|injury|trauma|twisted|twist|sprain|deformed|open wound|cannot weight bear|can't weight bear|hockey|sport)/.test(t)) return "trauma";
-  if (/(knee|ankle|hip|shoulder|elbow|wrist|joint|muscle|ache|stiff|swelling|locked|strain|sprain|back pain|neck pain|arthritis|sore knee)/.test(t)) return "musculoskeletal";
+  if (/(neck|back|spine|shoulder|knee|ankle|hip|wrist|elbow|joint|muscle|ache|stiff|spasm|tight|sore|swelling|locked|strain|sprain|arthritis)/.test(t)) return "musculoskeletal";
   if (/(depressed|anxious|panic|suicidal|kill myself|mental health|self harm|self-harm)/.test(t)) return "mental_health";
   if (/(stomach|abdominal|belly|nausea|vomit|diarrhoea|diarrhea|constipation)/.test(t)) return "gastrointestinal";
+  if (/(urine|wee|burning when urinating|uti|kidney|flank)/.test(t)) return "urinary";
+  if (/(rash|skin|itchy|lump|mole|lesion|spot|wound)/.test(t)) return "skin";
 
   return "general";
+}
+
+function detectIntent(text = "") {
+  const t = String(text).toLowerCase();
+
+  if (/(chest pain|can't breathe|cannot breathe|stroke|unconscious|severe bleeding|suicidal|kill myself|blue lips|facial droop|slurred speech)/.test(t)) {
+    return "emergency";
+  }
+
+  if (/(prevent|avoid|reduce risk|best way|what should i do to prevent|how do i prevent|lifestyle|diet|exercise|screening)/.test(t)) {
+    return "advice";
+  }
+
+  if (/(what is|explain|why does|how does|tell me about|difference between)/.test(t)) {
+    return "education";
+  }
+
+  if (/(pain|hurt|sore|swelling|fever|injury|twisted|cough|vomit|rash|symptom|dizzy|bleeding|unwell|neck|back|knee|chest|headache)/.test(t)) {
+    return "triage";
+  }
+
+  return "advice";
 }
 
 function emergencyTrigger(text = "") {
@@ -106,7 +131,10 @@ function emergencyTrigger(text = "") {
     "kill myself",
     "worst headache",
     "neck stiffness",
-    "new confusion"
+    "new confusion",
+    "saddle numbness",
+    "can't control bladder",
+    "can't control bowel"
   ];
 
   return triggers.find(x => t.includes(x));
@@ -128,11 +156,11 @@ function questionsFor(type) {
       "Are symptoms getting better, worse, or staying about the same?"
     ],
     musculoskeletal: [
-      "Can you bear weight on it now?",
-      "Were you able to continue playing or walking immediately after it happened?",
-      "Did swelling appear straight away, later, or not at all?",
-      "Is the knee locking, catching, or giving way?",
-      "Can you fully bend and straighten it?"
+      "Did this start after a specific movement or injury, or did it come on gradually?",
+      "Can you bear weight or use the affected area normally?",
+      "Is there swelling, redness, warmth, locking, stiffness or instability?",
+      "Do you have numbness, tingling, weakness, severe headache, fever, unexplained weight loss, or bladder or bowel symptoms?",
+      "What makes the pain better or worse?"
     ],
     neurological: [
       "Did the symptoms start suddenly?",
@@ -149,8 +177,8 @@ function questionsFor(type) {
       "Are symptoms spreading or worsening?"
     ],
     trauma: [
-      "Can you bear weight on it now?",
-      "Were you able to continue playing or walking immediately after it happened?",
+      "Can you bear weight or use the affected area now?",
+      "Were you able to continue activity immediately after it happened?",
       "Is there deformity, abnormal angling, severe swelling or bruising?",
       "Any numbness, tingling, weakness, coldness, colour change or reduced movement?",
       "Is there an open wound, bleeding or bone visible?"
@@ -169,6 +197,20 @@ function questionsFor(type) {
       "Any recent travel, new foods, medication changes or known medical conditions?",
       "Is the pain constant, cramping, burning or sharp?"
     ],
+    urinary: [
+      "Is there burning when passing urine, needing to go more often, fever, or flank pain?",
+      "Is there blood in the urine?",
+      "Any pregnancy, kidney disease, diabetes, or immune suppression?",
+      "Are there back or flank pains with fever or chills?",
+      "How long has this been happening?"
+    ],
+    skin: [
+      "Is the area painful, itchy, spreading, hot, swollen, blistering, bleeding or producing pus?",
+      "Did it appear suddenly or gradually?",
+      "Any fever, feeling unwell, or rapidly spreading redness?",
+      "Any new medicines, foods, bites, chemicals, or contact exposures?",
+      "Where on the body is it and how large is it?"
+    ],
     general: [
       "What is the main symptom troubling you most right now?",
       "How severe are symptoms from 0 to 10?",
@@ -183,6 +225,7 @@ function questionsFor(type) {
 
 function icdFor(type) {
   const map = {
+    diabetes: { code: "Z71.89", description: "Other specified counselling", confidence: 60 },
     respiratory: { code: "R06.02", description: "Shortness of breath / respiratory symptom", confidence: 60 },
     cardiac: { code: "R07.9", description: "Chest pain, unspecified", confidence: 55 },
     neurological: { code: "R29.818", description: "Other symptoms involving nervous system", confidence: 50 },
@@ -191,6 +234,8 @@ function icdFor(type) {
     musculoskeletal: { code: "M25.50", description: "Pain in unspecified joint", confidence: 55 },
     mental_health: { code: "F41.9", description: "Anxiety disorder, unspecified", confidence: 45 },
     gastrointestinal: { code: "R10.9", description: "Unspecified abdominal pain", confidence: 55 },
+    urinary: { code: "R30.0", description: "Dysuria", confidence: 45 },
+    skin: { code: "R21", description: "Rash and other nonspecific skin eruption", confidence: 45 },
     general: { code: "R69", description: "Illness, unspecified", confidence: 40 }
   };
 
@@ -204,6 +249,611 @@ function cleanJsonText(text = "") {
     .replace(/^```/i, "")
     .replace(/```$/i, "")
     .trim();
+}
+
+function detectGuidelinePathway(text = "", facts = {}, patient = {}) {
+  const t = String(text).toLowerCase();
+
+  if (/(diabetes|type 2|type two|prediabetes|blood sugar|glucose|hba1c|insulin resistance)/.test(t)) {
+    return "diabetes_prevention";
+  }
+
+  if (/(neck|back|spine|spinal|sciatica)/.test(t)) {
+    return "spinal_red_flags";
+  }
+
+  if (/(sepsis|fever|infection|confusion|very unwell|chills|low blood pressure|fast heart rate|short of breath|mottled|blue|not passing urine)/.test(t)) {
+    return "sepsis_screen";
+  }
+
+  if (/(stroke|slurred|facial droop|face droop|one sided weakness|weak arm|weak leg|sudden weakness|vision loss)/.test(t)) {
+    return "stroke_screen";
+  }
+
+  if (/(chest pain|chest pressure|crushing chest|angina|heart attack)/.test(t)) {
+    return "chest_pain";
+  }
+
+  if (/(knee|twist|twisted|hockey|sport|sports|fall|trauma|injury)/.test(t)) {
+    return "ottawa_knee";
+  }
+
+  if (/(shortness of breath|can't breathe|cannot breathe|wheeze|asthma|copd)/.test(t)) {
+    return "breathing_red_flags";
+  }
+
+  if (/(headache|migraine|worst headache|thunderclap|neck stiffness)/.test(t)) {
+    return "headache_red_flags";
+  }
+
+  if (/(abdominal pain|stomach pain|belly pain|severe stomach|blood in stool|black stool)/.test(t)) {
+    return "abdominal_red_flags";
+  }
+
+  if (/(rash|skin|itchy|cellulitis|red hot|blister|mole|lesion)/.test(t)) {
+    return "skin_red_flags";
+  }
+
+  if (/(urine|uti|burning when urinating|kidney|flank pain)/.test(t)) {
+    return "urinary_red_flags";
+  }
+
+  if (/(anxious|depressed|panic|self harm|suicidal|kill myself)/.test(t)) {
+    return "mental_health_safety";
+  }
+
+  return null;
+}
+
+function applyGuidelinePathway({ pathway, text = "", facts = {}, patient = {}, answers = [], intent = "triage", clinicalState = {} }) {
+  const t = String(`${text} ${answers.join(" ")}`).toLowerCase();
+
+  if (pathway === "diabetes_prevention" && intent !== "triage") {
+    return {
+      mode: "final",
+      triage_score: 20,
+      urgency: "Low",
+      confidence: 88,
+      overall_assessment:
+        "This is a general prevention question rather than a symptom-based triage case. The best-supported way to reduce type 2 diabetes risk is to assess personal risk, maintain a healthy weight, stay physically active, and follow a sustainable high-fibre, lower-GI eating pattern.",
+      differential: [],
+      icd: {
+        code: "Z71.89",
+        description: "Other specified counselling",
+        confidence: 60
+      },
+      missing_information: [
+        "Age",
+        "Body mass index or waist circumference",
+        "Family history of diabetes",
+        "History of gestational diabetes",
+        "Blood pressure",
+        "HbA1c or fasting glucose if high risk"
+      ],
+      advice:
+        "Aim for at least 150 minutes per week of moderate physical activity, include resistance training if possible, reduce sugary drinks and highly refined carbohydrates, choose high-fibre foods, work toward a healthy waist and weight, avoid smoking, and consider a GP check for diabetes risk assessment and HbA1c or fasting glucose if you have risk factors.",
+      revenue_prompts: [],
+      funding: { baseline: 0, potential: 0, uplift: 0 },
+      legal_notice: SAFETY_NOTICE
+    };
+  }
+
+  if (pathway === "spinal_red_flags") {
+    const redFlags = [
+      "trauma",
+      "fall",
+      "accident",
+      "fever",
+      "weight loss",
+      "night pain",
+      "history of cancer",
+      "cancer",
+      "steroid use",
+      "immunosuppressed",
+      "iv drug use",
+      "incontinence",
+      "can't control bladder",
+      "cannot control bladder",
+      "can't control bowel",
+      "cannot control bowel",
+      "saddle numbness",
+      "saddle anaesthesia",
+      "weakness in legs",
+      "progressive weakness",
+      "numbness in both legs",
+      "unsteady walking"
+    ];
+
+    const hasRedFlag = redFlags.some(flag => t.includes(flag));
+
+    if (hasRedFlag) {
+      return {
+        mode: "final",
+        triage_score: 90,
+        urgency: "High",
+        confidence: 85,
+        overall_assessment:
+          "Red flag features have been reported with neck, back or spinal symptoms. This may indicate a serious underlying condition such as spinal cord involvement, cauda equina syndrome, infection, fracture or malignancy. Urgent medical assessment is recommended.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Spinal cord or nerve compression",
+            probability: 35,
+            likelihood: "Possible",
+            reasoning: "Neurological or bladder, bowel, gait or weakness features are spinal red flags.",
+            icd_suggestion: { code: "G95.9", description: "Disease of spinal cord, unspecified" }
+          },
+          {
+            rank: 2,
+            condition: "Spinal infection",
+            probability: 25,
+            likelihood: "Possible",
+            reasoning: "Fever, immune suppression or intravenous drug use increases concern.",
+            icd_suggestion: { code: "M46.2", description: "Osteomyelitis of vertebra" }
+          },
+          {
+            rank: 3,
+            condition: "Fracture or malignancy-related spinal pain",
+            probability: 25,
+            likelihood: "Possible",
+            reasoning: "Trauma, steroid use, cancer history, unexplained weight loss or night pain increase risk.",
+            icd_suggestion: { code: "M54.9", description: "Dorsalgia, unspecified" }
+          }
+        ],
+        icd: { code: "M54.9", description: "Dorsalgia, unspecified", confidence: 50 },
+        missing_information: [
+          "Detailed neurological examination",
+          "Bladder and bowel function",
+          "Saddle sensation",
+          "Fever and infection risk",
+          "Cancer history",
+          "Trauma or osteoporosis risk"
+        ],
+        advice:
+          "Seek urgent medical assessment. Do not delay if there is weakness, numbness, bladder or bowel change, saddle numbness, fever, severe worsening pain, unexplained weight loss, night pain, or recent trauma.",
+        funding: { baseline: 1200, potential: 2500, uplift: 1300 },
+        revenue_prompts: [
+          { message: "Document spinal red flags, neurological symptoms, bladder and bowel function, and trauma or cancer history.", value: 300 }
+        ],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+
+    if (/(neck)/.test(t) && !facts.mechanismKnown && answers.length === 0) {
+      return {
+        mode: "question",
+        question: "Did this start after a specific movement or injury, or did it come on gradually?",
+        reasoning: "This helps distinguish mechanical neck strain from other causes and guides the next red flag screen.",
+        clinicalState: {
+          suspectedCategory: "neck pain",
+          keyFindings: ["Neck pain reported"],
+          missingCritical: ["Mechanism of onset", "Neurological symptoms", "Red flags"],
+          redFlagsChecked: [],
+          hypotheses: [
+            { condition: "Muscle strain", probability: 50, reasoning: "Common cause of acute neck pain." },
+            { condition: "Facet joint irritation", probability: 30, reasoning: "Often movement or posture related." },
+            { condition: "Disc or nerve-related pain", probability: 20, reasoning: "Requires neurological screening." }
+          ]
+        },
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+
+    if (/(neck|back|spine)/.test(t) && !facts.neurovascularKnown && answers.length <= 2) {
+      return {
+        mode: "question",
+        question: "Do you have any numbness, tingling, weakness in your arms or legs, problems walking, severe headache, fever, unexplained weight loss, or bladder or bowel changes?",
+        reasoning: "This screens for spinal red flags including nerve involvement, infection, malignancy, fracture risk and cord compression.",
+        clinicalState: {
+          suspectedCategory: "spinal pain",
+          keyFindings: clinicalState.keyFindings || [],
+          missingCritical: ["Neurological symptoms", "Systemic red flags", "Bladder and bowel symptoms"],
+          redFlagsChecked: [],
+          hypotheses: [
+            { condition: "Mechanical spinal pain", probability: 65, reasoning: "Most neck and back pain is mechanical when red flags are absent." },
+            { condition: "Disc or nerve-related pain", probability: 20, reasoning: "Needs screening for numbness, tingling or weakness." },
+            { condition: "Serious spinal pathology", probability: 15, reasoning: "Low probability but high consequence; red flags must be checked." }
+          ]
+        },
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+  }
+
+  if (pathway === "ottawa_knee") {
+    const age = Number(patient.age || 0);
+
+    const criteria = {
+      age55: age >= 55,
+      fibularHeadTenderness: /fibular head|outside of knee|outer knee bony tenderness/.test(t),
+      isolatedPatellaTenderness: /patella|kneecap|knee cap/.test(t) && /tender|painful|sore/.test(t),
+      cannotFlex90: /can't bend|cannot bend|cant bend|less than 90|won't bend/.test(t),
+      cannotWeightBear: /can't walk|cannot walk|cant walk|unable to walk|can't bear weight|cannot bear weight|unable to bear weight|four steps/.test(t)
+    };
+
+    const positive = Object.values(criteria).some(Boolean);
+
+    if (positive) {
+      return {
+        mode: "final",
+        triage_score: 75,
+        urgency: "Moderate to High",
+        confidence: 82,
+        overall_assessment:
+          "This knee injury triggers an Ottawa Knee Rule criterion, so an x-ray should be considered to assess for fracture. This does not mean there is definitely a fracture, but it raises the need for clinical review and imaging.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Fracture or bony injury",
+            probability: 35,
+            likelihood: "Possible",
+            reasoning: "Ottawa Knee Rule positive.",
+            icd_suggestion: { code: "S82.90", description: "Fracture of lower leg, unspecified" }
+          },
+          {
+            rank: 2,
+            condition: "Ligament injury",
+            probability: 35,
+            likelihood: "Possible",
+            reasoning: "Twisting sports mechanism.",
+            icd_suggestion: { code: "S83.90", description: "Sprain of unspecified site of knee" }
+          },
+          {
+            rank: 3,
+            condition: "Meniscal injury",
+            probability: 30,
+            likelihood: "Possible",
+            reasoning: "Twisting injury can involve meniscus, especially with locking or catching.",
+            icd_suggestion: { code: "S83.20", description: "Tear of meniscus, current injury" }
+          }
+        ],
+        icd: { code: "S89.90", description: "Unspecified injury of lower leg", confidence: 55 },
+        missing_information: [
+          "Exact bony tenderness site",
+          "Ability to take four steps",
+          "Range of motion",
+          "Neurovascular status",
+          "Clinician examination"
+        ],
+        advice:
+          "Arrange clinical review and consider x-ray. Seek urgent care if there is deformity, inability to walk, severe swelling, numbness, coldness, colour change, or severe worsening pain.",
+        funding: { baseline: 1200, potential: 2200, uplift: 1000 },
+        revenue_prompts: [
+          { message: "Document Ottawa Knee Rule criteria and weight-bearing ability.", value: 250 }
+        ],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+
+    if (!facts.weightBearingKnown) {
+      return {
+        mode: "question",
+        question: "Can you bear weight and take four steps on it now?",
+        reasoning: "This applies the Ottawa Knee Rule and helps decide whether x-ray assessment is needed.",
+        clinicalState: {
+          suspectedCategory: "knee injury",
+          keyFindings: facts.mechanismKnown ? ["Mechanism described"] : [],
+          missingCritical: ["Weight-bearing", "Flexion to 90 degrees", "Bony tenderness"],
+          redFlagsChecked: [],
+          hypotheses: [
+            { condition: "Ligament sprain or tear", probability: 40, reasoning: "Sports twisting mechanism." },
+            { condition: "Meniscal injury", probability: 35, reasoning: "Twisting mechanism." },
+            { condition: "Fracture or bony injury", probability: 25, reasoning: "Needs Ottawa Knee Rule screening." }
+          ]
+        },
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+  }
+
+  if (pathway === "sepsis_screen") {
+    const highRisk =
+      /(confusion|mottled|blue|cyanosis|not passing urine|severe breathlessness|very drowsy|collapse|low blood pressure)/.test(t);
+
+    if (highRisk) {
+      return {
+        mode: "final",
+        triage_score: 95,
+        urgency: "EMERGENCY",
+        confidence: 85,
+        overall_assessment:
+          "Possible sepsis red flags are present. This needs urgent medical assessment now.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Possible sepsis",
+            probability: 70,
+            likelihood: "Possible",
+            reasoning: "Infection symptoms with high-risk features.",
+            icd_suggestion: { code: "A41.9", description: "Sepsis, unspecified organism" }
+          }
+        ],
+        advice:
+          "Seek urgent emergency medical care now. Do not wait for online advice if the person is confused, very drowsy, breathless, mottled or blue, collapsing, or not passing urine.",
+        missing_information: ["Temperature", "Heart rate", "Respiratory rate", "Blood pressure", "Oxygen saturation"],
+        funding: { baseline: 0, potential: 0, uplift: 0 },
+        revenue_prompts: [],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+
+    return {
+      mode: "question",
+      question: "Is the person confused, very drowsy, severely breathless, mottled or blue, collapsing, or passing very little urine?",
+      reasoning: "This screens for high-risk sepsis features that require urgent escalation.",
+      clinicalState: {
+        suspectedCategory: "possible infection or sepsis",
+        keyFindings: [],
+        missingCritical: ["Mental state", "Breathing", "Circulation", "Urine output"],
+        redFlagsChecked: [],
+        hypotheses: [
+          { condition: "Uncomplicated infection", probability: 55, reasoning: "Infection symptoms without confirmed high-risk features yet." },
+          { condition: "Possible sepsis", probability: 30, reasoning: "Needs red-flag screening." },
+          { condition: "Viral illness", probability: 15, reasoning: "Common alternative depending on symptoms." }
+        ]
+      },
+      legal_notice: SAFETY_NOTICE
+    };
+  }
+
+  if (pathway === "stroke_screen") {
+    return {
+      mode: "final",
+      triage_score: 95,
+      urgency: "EMERGENCY",
+      confidence: 85,
+      overall_assessment:
+        "Possible stroke symptoms have been described. Sudden facial droop, arm weakness, speech problems, confusion or vision loss require emergency assessment immediately.",
+      differential: [
+        {
+          rank: 1,
+          condition: "Possible stroke or transient ischemic attack",
+          probability: 70,
+          likelihood: "Possible",
+          reasoning: "Sudden focal neurological symptoms are high-risk.",
+          icd_suggestion: { code: "I64", description: "Stroke, not specified as haemorrhage or infarction" }
+        }
+      ],
+      advice: "Call emergency services immediately. Do not drive yourself.",
+      missing_information: ["Exact time symptoms started", "FAST symptoms", "Blood glucose", "Blood pressure"],
+      funding: { baseline: 0, potential: 0, uplift: 0 },
+      revenue_prompts: [],
+      legal_notice: SAFETY_NOTICE
+    };
+  }
+
+  if (pathway === "chest_pain") {
+    return {
+      mode: "final",
+      triage_score: 90,
+      urgency: "EMERGENCY",
+      confidence: 80,
+      overall_assessment:
+        "Chest pain or pressure can be cardiac until proven otherwise, especially if it is heavy, crushing, exertional, associated with breathlessness, sweating, nausea, dizziness, or radiation to the arm, jaw, neck, back or shoulder.",
+      differential: [
+        {
+          rank: 1,
+          condition: "Acute coronary syndrome",
+          probability: 45,
+          likelihood: "Possible",
+          reasoning: "Chest pain pattern requires urgent exclusion.",
+          icd_suggestion: { code: "I24.9", description: "Acute ischaemic heart disease, unspecified" }
+        },
+        {
+          rank: 2,
+          condition: "Pulmonary embolism or respiratory cause",
+          probability: 25,
+          likelihood: "Possible",
+          reasoning: "Breathlessness or pleuritic pain may point away from cardiac causes.",
+          icd_suggestion: { code: "R07.9", description: "Chest pain, unspecified" }
+        }
+      ],
+      advice: "Seek urgent emergency assessment now for chest pain or pressure. Do not ignore or self-manage potentially cardiac chest pain.",
+      missing_information: ["Onset", "Radiation", "Breathlessness", "Sweating", "Nausea", "Cardiac risk factors"],
+      funding: { baseline: 0, potential: 0, uplift: 0 },
+      revenue_prompts: [],
+      legal_notice: SAFETY_NOTICE
+    };
+  }
+
+  if (pathway === "breathing_red_flags") {
+    const severe = /(can't breathe|cannot breathe|blue lips|severe breathlessness|struggling to breathe|unable to speak)/.test(t);
+
+    if (severe) {
+      return {
+        mode: "final",
+        triage_score: 95,
+        urgency: "EMERGENCY",
+        confidence: 85,
+        overall_assessment: "Severe breathing difficulty is an emergency symptom.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Severe respiratory distress",
+            probability: 70,
+            likelihood: "Possible",
+            reasoning: "Reported severe breathlessness or cyanosis.",
+            icd_suggestion: { code: "R06.03", description: "Acute respiratory distress" }
+          }
+        ],
+        advice: "Seek emergency medical care immediately.",
+        missing_information: ["Oxygen saturation", "Respiratory rate", "Chest pain", "Wheeze", "Fever"],
+        funding: { baseline: 0, potential: 0, uplift: 0 },
+        revenue_prompts: [],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+
+    return {
+      mode: "question",
+      question: "Are you short of breath at rest, struggling to speak in full sentences, or are your lips or fingers blue?",
+      reasoning: "This screens for severe respiratory distress requiring urgent care.",
+      clinicalState: {
+        suspectedCategory: "breathing symptoms",
+        keyFindings: [],
+        missingCritical: ["Severity at rest", "Ability to speak", "Cyanosis", "Oxygen saturation"],
+        redFlagsChecked: [],
+        hypotheses: [
+          { condition: "Viral respiratory illness", probability: 35, reasoning: "Common cause." },
+          { condition: "Asthma or airway flare", probability: 30, reasoning: "Wheeze or breathlessness pattern." },
+          { condition: "Pneumonia or serious respiratory illness", probability: 25, reasoning: "Needs fever and severity assessment." }
+        ]
+      },
+      legal_notice: SAFETY_NOTICE
+    };
+  }
+
+  if (pathway === "headache_red_flags") {
+    const severe = /(worst headache|thunderclap|sudden severe|neck stiffness|confusion|weakness|vision loss|fever)/.test(t);
+
+    if (severe) {
+      return {
+        mode: "final",
+        triage_score: 90,
+        urgency: "EMERGENCY",
+        confidence: 80,
+        overall_assessment:
+          "Headache red flags have been reported. Sudden severe headache, neck stiffness, fever, confusion, weakness or vision loss requires urgent medical assessment.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Serious headache cause requiring urgent exclusion",
+            probability: 60,
+            likelihood: "Possible",
+            reasoning: "Red flag headache features.",
+            icd_suggestion: { code: "R51.9", description: "Headache, unspecified" }
+          }
+        ],
+        advice: "Seek urgent medical care now.",
+        missing_information: ["Onset speed", "Neurological symptoms", "Fever", "Neck stiffness", "Trauma"],
+        funding: { baseline: 0, potential: 0, uplift: 0 },
+        revenue_prompts: [],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+  }
+
+  if (pathway === "abdominal_red_flags") {
+    const severe = /(severe pain|rigid abdomen|black stool|blood in stool|vomiting blood|fainting|pregnant|right lower abdomen|chest pain)/.test(t);
+
+    if (severe) {
+      return {
+        mode: "final",
+        triage_score: 85,
+        urgency: "High",
+        confidence: 75,
+        overall_assessment:
+          "Abdominal red flags have been reported. Severe abdominal pain, blood, black stool, pregnancy, fainting, or rigid abdomen needs urgent clinical assessment.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Serious abdominal condition requiring urgent exclusion",
+            probability: 55,
+            likelihood: "Possible",
+            reasoning: "Red flag abdominal features.",
+            icd_suggestion: { code: "R10.0", description: "Acute abdomen" }
+          }
+        ],
+        advice: "Seek urgent medical assessment, especially if pain is severe, persistent, associated with fever, fainting, blood, pregnancy or worsening symptoms.",
+        missing_information: ["Pain location", "Fever", "Vomiting", "Bowel changes", "Pregnancy status", "Blood in stool"],
+        funding: { baseline: 0, potential: 0, uplift: 0 },
+        revenue_prompts: [],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+  }
+
+  if (pathway === "skin_red_flags") {
+    const severe = /(rapidly spreading|red streak|fever|very painful|black skin|purple rash|blistering|face swelling|trouble breathing)/.test(t);
+
+    if (severe) {
+      return {
+        mode: "final",
+        triage_score: 80,
+        urgency: "High",
+        confidence: 75,
+        overall_assessment:
+          "Skin red flags have been reported. Rapidly spreading redness, fever, severe pain, purple rash, black skin, blistering, facial swelling or breathing difficulty needs urgent clinical assessment.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Serious skin infection or allergic reaction",
+            probability: 55,
+            likelihood: "Possible",
+            reasoning: "Red flag skin features.",
+            icd_suggestion: { code: "L03.90", description: "Cellulitis, unspecified" }
+          }
+        ],
+        advice: "Seek urgent medical assessment if redness is spreading quickly, there is fever, severe pain, purple or black skin change, blistering, facial swelling, or breathing difficulty.",
+        missing_information: ["Spread rate", "Fever", "Pain severity", "Exposure history", "Medication history"],
+        funding: { baseline: 0, potential: 0, uplift: 0 },
+        revenue_prompts: [],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+  }
+
+  if (pathway === "urinary_red_flags") {
+    const severe = /(fever|flank pain|kidney pain|pregnant|vomiting|confusion|blood in urine|male)/.test(t);
+
+    if (severe) {
+      return {
+        mode: "final",
+        triage_score: 75,
+        urgency: "Moderate to High",
+        confidence: 75,
+        overall_assessment:
+          "Urinary symptoms with fever, flank pain, vomiting, pregnancy, confusion, blood in urine, or male urinary infection features need prompt clinical assessment.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Urinary tract infection or kidney infection",
+            probability: 60,
+            likelihood: "Possible",
+            reasoning: "Urinary symptoms with possible complication features.",
+            icd_suggestion: { code: "N39.0", description: "Urinary tract infection, site not specified" }
+          }
+        ],
+        advice: "Arrange prompt medical review, especially with fever, flank pain, vomiting, pregnancy, confusion, blood in urine, or worsening symptoms.",
+        missing_information: ["Fever", "Flank pain", "Pregnancy status", "Urine blood", "Vomiting", "Past kidney disease"],
+        funding: { baseline: 0, potential: 0, uplift: 0 },
+        revenue_prompts: [],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+  }
+
+  if (pathway === "mental_health_safety") {
+    const danger = /(suicidal|kill myself|self harm|hurt myself|hurt someone|not safe)/.test(t);
+
+    if (danger) {
+      return {
+        mode: "final",
+        triage_score: 95,
+        urgency: "EMERGENCY",
+        confidence: 85,
+        overall_assessment:
+          "There may be immediate safety concerns. This needs urgent support now.",
+        differential: [
+          {
+            rank: 1,
+            condition: "Acute mental health safety risk",
+            probability: 70,
+            likelihood: "Possible",
+            reasoning: "Self-harm or harm-related language.",
+            icd_suggestion: { code: "R45.851", description: "Suicidal ideations" }
+          }
+        ],
+        advice: "If there is immediate danger, call emergency services now. If possible, stay with a trusted person and remove access to means of harm.",
+        missing_information: ["Immediate safety", "Plan or intent", "Supports present", "Substance use", "Previous attempts"],
+        funding: { baseline: 0, potential: 0, uplift: 0 },
+        revenue_prompts: [],
+        legal_notice: SAFETY_NOTICE
+      };
+    }
+  }
+
+  return null;
 }
 
 function isDuplicateQuestion(nextQuestion = "", askedQuestions = [], facts = {}) {
@@ -251,7 +901,7 @@ function normaliseQuestion(question = "", type = "general", askedQuestions = [],
   }
 
   if (facts.mechanismKnown && /(how did|what happened|mechanism|specific injury|twist|fall|overuse|happened)/i.test(q)) {
-    q = "Were you able to continue playing or walking immediately after it happened?";
+    q = "Were you able to continue activity or use the affected area immediately after it happened?";
   }
 
   if (facts.onsetKnown && /(when did|how long|start|began|begin|onset)/i.test(q)) {
@@ -259,11 +909,11 @@ function normaliseQuestion(question = "", type = "general", askedQuestions = [],
   }
 
   if (facts.weightBearingKnown && /(bear weight|walk|walking|continue playing)/i.test(q)) {
-    q = "Is the knee locking, catching, or giving way?";
+    q = "Is there locking, catching, giving way, numbness, tingling, or weakness?";
   }
 
   if (facts.swellingKnown && /(swelling|swollen)/i.test(q)) {
-    q = "Can you fully bend and straighten it?";
+    q = "Can you fully move the affected area?";
   }
 
   return q;
@@ -282,7 +932,7 @@ function fallbackAssessment(symptoms, answers = [], facts = {}) {
       urgency: "EMERGENCY",
       confidence: 95,
       uncertainty: "Emergency red flag detected. Diagnosis still requires clinician review.",
-      overall_assessment: `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}. Seek urgent medical care immediately.`,
+      overall_assessment: `Emergency red flag detected: ${red.toUpperCase()}. Seek urgent medical care immediately.`,
       differential: [],
       conditions: [],
       icd,
@@ -302,8 +952,6 @@ function fallbackAssessment(symptoms, answers = [], facts = {}) {
     type === "musculoskeletal" ? 52 :
     45;
 
-  const kneeMechanism = facts.mechanismKnown && /(knee|hockey|twist|twisted|sport)/i.test(combined);
-
   return {
     mode: "final",
     triage_score: score,
@@ -311,71 +959,31 @@ function fallbackAssessment(symptoms, answers = [], facts = {}) {
     confidence: 62,
     uncertainty: "Moderate. This is symptom-based decision support and requires clinician review.",
     overall_assessment:
-      kneeMechanism
-        ? "The history suggests a twisting sports-related knee injury. Key possibilities include ligament sprain, meniscal injury, or less commonly fracture. Clinical review is required, especially if weight-bearing is difficult, swelling is significant, or the joint is locking or unstable."
-        : `Based on the information provided, this appears most consistent with a ${type.replace("_", " ")} presentation. Clinical review is still required.`,
-    differential: kneeMechanism
-      ? [
-          {
-            rank: 1,
-            condition: "Ligament sprain or tear",
-            probability: 40,
-            likelihood: "Possible",
-            reasoning: "Twisting sports mechanism can stress knee ligaments.",
-            icd_suggestion: { code: "S83.90", description: "Sprain of unspecified site of knee" }
-          },
-          {
-            rank: 2,
-            condition: "Meniscal injury",
-            probability: 35,
-            likelihood: "Possible",
-            reasoning: "Twisting injuries can cause meniscal symptoms such as locking, catching or joint-line pain.",
-            icd_suggestion: { code: "S83.20", description: "Tear of meniscus, current injury" }
-          },
-          {
-            rank: 3,
-            condition: "Fracture or bone injury",
-            probability: 25,
-            likelihood: "Possible",
-            reasoning: "Needs consideration if unable to bear weight, severe bony tenderness or marked swelling.",
-            icd_suggestion: { code: "S82.90", description: "Fracture of lower leg, unspecified" }
-          }
-        ]
-      : [
-          {
-            rank: 1,
-            condition: `${type.replace("_", " ")} condition`,
-            probability: 55,
-            likelihood: "Possible",
-            reasoning: "The symptom wording and answers align with this category.",
-            icd_suggestion: icd
-          },
-          {
-            rank: 2,
-            condition: "Non-specific acute illness or injury",
-            probability: 25,
-            likelihood: "Possible",
-            reasoning: "More detail and examination findings are needed.",
-            icd_suggestion: { code: "R69", description: "Illness, unspecified" }
-          }
-        ],
-    conditions: [
+      `Based on the information provided, this appears most consistent with a ${type.replace("_", " ")} presentation. Clinical review is still required.`,
+    differential: [
       {
-        name: kneeMechanism ? "Sports-related knee injury" : `${type.replace("_", " ")} presentation`,
+        rank: 1,
+        condition: `${type.replace("_", " ")} condition`,
+        probability: 55,
         likelihood: "Possible",
-        reason: kneeMechanism ? "Twisting mechanism at hockey." : "Suggested by symptom category."
+        reasoning: "The symptom wording and answers align with this category.",
+        icd_suggestion: icd
       }
     ],
-    icd: kneeMechanism
-      ? { code: "S83.90", description: "Sprain of unspecified site of knee", confidence: 50 }
-      : icd,
+    conditions: [
+      {
+        name: `${type.replace("_", " ")} presentation`,
+        likelihood: "Possible",
+        reason: "Suggested by symptom category."
+      }
+    ],
+    icd,
     cpt: score >= 70 ? "99284" : "99213",
     denial_risk: score >= 70 ? "Moderate" : "Low",
     missing_information: [
-      "Ability to bear weight",
-      "Swelling timing and severity",
-      "Locking, catching or instability",
-      "Bony tenderness",
+      "Vital signs",
+      "Relevant past medical history",
+      "Medication and allergy history",
       "Clinician examination findings"
     ],
     funding: {
@@ -384,11 +992,11 @@ function fallbackAssessment(symptoms, answers = [], facts = {}) {
       uplift: score >= 70 ? 1000 : 400
     },
     revenue_prompts: [
-      { message: "Document mechanism of injury and immediate functional impact.", value: 250 },
-      { message: "Record weight-bearing ability, swelling, instability and examination findings.", value: 300 }
+      { message: "Document symptom duration, severity, relevant negatives and examination findings.", value: 250 },
+      { message: "Record comorbidities, medications, observations and escalation decisions.", value: 300 }
     ],
     advice:
-      "Arrange clinical review. Seek urgent care if unable to bear weight, there is severe swelling, deformity, numbness, coldness, colour change, severe pain, or the knee is locked.",
+      "Arrange appropriate clinical review. Escalate urgently if symptoms worsen, severe pain develops, breathing becomes difficult, neurological symptoms occur, or the patient appears significantly unwell.",
     legal_notice: SAFETY_NOTICE
   };
 }
@@ -416,7 +1024,6 @@ Rules:
 - If facts.weightBearingKnown is true, do NOT ask whether they can walk, bear weight, or continue playing.
 - If facts.swellingKnown is true, do NOT ask whether swelling is present.
 - If facts.lockingKnown is true, do NOT ask whether it locks, catches or gives way.
-- If the patient has said they twisted it at hockey, treat mechanism as known and move to immediate function, weight-bearing, swelling timing, locking/catching/giving way, range of movement, or neurovascular symptoms.
 - Prioritise dangerous conditions first.
 - If emergency red flags are suggested, finalise with urgency EMERGENCY.
 - Stop asking questions when preliminary assessment or escalation decision is sufficiently clear.
@@ -553,7 +1160,7 @@ Use senior-consultant hypothesis-driven reasoning. Do not ask for information al
   }
 }
 
-async function callFreeChatAI(question, context = {}) {
+async function callFreeChatAI(question, context = {}, intent = "advice") {
   if (!openai) {
     console.error("OPENAI_API_KEY is missing in Render environment variables.");
     return null;
@@ -566,8 +1173,24 @@ async function callFreeChatAI(question, context = {}) {
       messages: [
         {
           role: "system",
-          content:
-            "You are DOCTORPD, a clinical decision-support assistant. Do not diagnose definitively. Be clear, safe and conversational. Escalate emergency red flags. Ask one useful follow-up question if needed."
+          content: `
+You are DOCTORPD acting like a senior general practitioner.
+
+Intent: ${intent}
+
+Behaviour:
+- triage: ask structured clinical questions.
+- advice: give practical prevention, lifestyle and next-step advice.
+- education: explain clearly in plain English.
+- emergency: escalate immediately.
+
+Rules:
+- Never ask symptom-triage questions for advice or education questions.
+- Do not diagnose definitively.
+- Be clear, safe, useful and concise.
+- Offer personalisation where useful.
+- Include safety advice where appropriate.
+`
         },
         {
           role: "user",
@@ -646,7 +1269,8 @@ app.post("/ai/personal-check", async (req, res) => {
       facts = {},
       currentText = "",
       imageBase64 = "",
-      patient = {}
+      patient = {},
+      intent = "triage"
     } = req.body;
 
     if (!Array.isArray(answers)) answers = [];
@@ -660,9 +1284,22 @@ app.post("/ai/personal-check", async (req, res) => {
       const emergency = fallbackAssessment(combined, answers, facts);
       emergency.urgency = "EMERGENCY";
       emergency.triage_score = 100;
-      emergency.overall_assessment = `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}. Seek urgent medical care immediately.`;
+      emergency.overall_assessment = `Emergency red flag detected: ${red.toUpperCase()}. Seek urgent medical care immediately.`;
       return res.json(emergency);
     }
+
+    const pathway = detectGuidelinePathway(combined, facts, patient);
+    const guidelineResult = applyGuidelinePathway({
+      pathway,
+      text: combined,
+      facts,
+      patient,
+      answers,
+      intent,
+      clinicalState
+    });
+
+    if (guidelineResult) return res.json(guidelineResult);
 
     let ai = await callClinicalAI({
       symptoms,
@@ -730,25 +1367,52 @@ app.post("/ai/personal-check", async (req, res) => {
 
 app.post("/ai/ask-doctor", async (req, res) => {
   try {
-    const { question = "", context = {}, imageBase64 = "" } = req.body;
+    const { question = "", context = {}, imageBase64 = "", intent = detectIntent(question) } = req.body;
     const combined = `${question} ${JSON.stringify(context || {})}`;
     const red = emergencyTrigger(combined);
 
     if (red) {
       return res.json({
         response:
-          `🚨 EMERGENCY RED FLAG DETECTED: ${red.toUpperCase()}.\n\n` +
+          `Emergency red flag detected: ${red.toUpperCase()}.\n\n` +
           `Please seek urgent medical care immediately.\n\n${SAFETY_NOTICE}`
       });
     }
 
-    let response = await callFreeChatAI(question, { ...context, imageSupplied: !!imageBase64 });
+    const pathway = detectGuidelinePathway(question, context?.facts || {}, context?.patient || {});
+    const guidelineResult = applyGuidelinePathway({
+      pathway,
+      text: question,
+      facts: context?.facts || {},
+      patient: context?.patient || {},
+      answers: context?.answers || [],
+      intent,
+      clinicalState: context?.clinicalState || {}
+    });
+
+    if (guidelineResult && guidelineResult.mode === "final") {
+      return res.json({
+        response:
+          `${guidelineResult.overall_assessment}\n\n` +
+          `${guidelineResult.advice}\n\n` +
+          `${guidelineResult.legal_notice}`
+      });
+    }
+
+    let response = await callFreeChatAI(question, { ...context, imageSupplied: !!imageBase64 }, intent);
 
     if (!response) {
-      const type = classify(question);
-      response =
-        `This sounds ${type.replace("_", " ")}-related, but I would need more detail before giving useful decision support.\n\n` +
-        `${chooseFallbackQuestion(type, [], {})}\n\n${SAFETY_NOTICE}`;
+      if (intent === "advice" || intent === "education") {
+        response =
+          `Here is general information that may help:\n\n` +
+          `For prevention and lifestyle questions, the most useful next step is to understand your personal risk factors, then tailor practical actions around diet, exercise, sleep, smoking, alcohol, weight, family history and relevant screening.\n\n` +
+          `Would you like personalised guidance based on your age, weight, activity level and family history?\n\n${SAFETY_NOTICE}`;
+      } else {
+        const type = classify(question);
+        response =
+          `This sounds ${type.replace("_", " ")}-related, but I would need more detail before giving useful decision support.\n\n` +
+          `${chooseFallbackQuestion(type, [], {})}\n\n${SAFETY_NOTICE}`;
+      }
     }
 
     return res.json({ response });
