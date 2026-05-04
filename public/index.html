@@ -5,74 +5,390 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
-    body{margin:0;background:#0f172a;color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
-    .layout{display:grid;grid-template-columns:260px 1fr;height:100vh}
-    .sidebar{background:#020617;border-right:1px solid #1e293b;padding:18px;display:flex;flex-direction:column}
-    .brand{font-size:24px;font-weight:800;margin-bottom:24px;color:#7c3aed}
-    .nav{padding:12px 16px;border-radius:12px;cursor:pointer;margin-bottom:8px;color:#cbd5e1;font-weight:500}
-    .nav:hover{background:#1e293b;color:white}
-    .main{display:flex;flex-direction:column;height:100vh;overflow:hidden}
-    .doctor{display:flex;align-items:center;gap:12px;padding:16px 24px;background:#020617;border-bottom:1px solid #1e293b;flex-wrap:wrap}
-    .avatar{width:48px;height:48px;border-radius:50%;overflow:hidden;border:3px solid #7c3aed;flex:none}
-    .avatar img{width:100%;height:100%;object-fit:cover}
-    .doctor-name{font-weight:700;font-size:18px}
-    .patient-name{font-size:13px;color:#94a3b8}
-    .mode-toggle{display:flex;gap:6px;margin-left:auto;background:#1e293b;border-radius:9999px;padding:3px}
-    .mode-btn{padding:6px 16px;border-radius:9999px;font-size:13px;cursor:pointer;font-weight:500}
-    .mode-btn.active{background:#7c3aed;color:white}
-    .gender-toggle{display:flex;gap:6px;margin-left:12px}
-    .gender-btn{padding:6px 14px;border-radius:9999px;font-size:13px;cursor:pointer;background:#1e293b;color:#cbd5e1;font-weight:500}
-    .gender-btn.active{background:#7c3aed;color:white}
-    .chat{flex:1;overflow-y:auto;padding:24px 28px;scroll-behavior:smooth;background:#0a1120}
-    .row{display:flex;gap:12px;margin-bottom:20px}
-    .user-row{justify-content:flex-end}
-    .bubble{max-width:78%;padding:16px 20px;border-radius:20px;line-height:1.55;white-space:pre-wrap;position:relative;font-size:16px}
-    .ai{background:#1e293b;border:1px solid #334155;border-top-left-radius:4px}
-    .user{background:#7c3aed;border-top-right-radius:4px}
-    .listen-btn{position:absolute;right:14px;bottom:12px;font-size:20px;cursor:pointer;opacity:.75}
-    .listen-btn:hover{opacity:1}
-    .image-preview{max-width:220px;margin-top:8px;border-radius:12px}
-    .inputbar{display:flex;gap:12px;padding:18px 24px;background:#020617;border-top:1px solid #1e293b;align-items:end}
-    input,textarea{width:100%;box-sizing:border-box;background:#1e293b;color:white;border:1px solid #334155;border-radius:16px;padding:14px 18px;font-size:15px;margin-bottom:10px}
-    textarea{min-height:120px;resize:vertical}
-    button{background:#7c3aed;color:white;border:none;padding:14px 22px;border-radius:16px;cursor:pointer;font-weight:700;font-size:16px}
-    button.secondary{background:#334155}
-    .mic-btn,.image-btn{font-size:24px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#7c3aed;margin-bottom:4px;cursor:pointer;flex:none}
-    .listening{animation:pulse 1.5s infinite}
-    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.12)}100%{transform:scale(1)}}
-    .logout-btn{background:#334155;color:white;padding:8px 16px;border-radius:9999px;font-size:14px;cursor:pointer;margin-left:auto}
-    .panel-wrapper{border-top:1px solid #1e293b;background:#020617}
-    .panel-header{padding:12px 24px;background:#1e293b;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:500}
-    .panel-content{padding:20px;max-height:340px;overflow-y:auto}
-    .card{margin:30px;padding:28px;background:#1e293b;border:1px solid #334155;border-radius:20px;overflow:auto}
-    .box{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:16px;margin-top:14px}
-    .hypothesis-box{background:#111827;border:1px solid #4c1d95;border-radius:14px;padding:14px;margin-top:12px;font-size:14px;color:#ddd6fe}
-    table{width:100%;border-collapse:collapse}
-    th,td{border-bottom:1px solid #334155;padding:10px;text-align:left;vertical-align:top}
-    .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-    .metric{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:18px}
-    .metric b{display:block;font-size:24px;margin-top:8px}
-    @media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{display:none}.mode-toggle{margin-left:0}.bubble{max-width:92%}.inputbar{flex-wrap:wrap}}
+    body {
+      margin: 0;
+      background: #0f172a;
+      color: #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      height: 100vh;
+    }
+
+    .sidebar {
+      background: #020617;
+      border-right: 1px solid #1e293b;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 24px;
+      color: #7c3aed;
+    }
+
+    .nav {
+      padding: 12px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    .nav:hover {
+      background: #1e293b;
+      color: white;
+    }
+
+    .main {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .doctor {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 24px;
+      background: #020617;
+      border-bottom: 1px solid #1e293b;
+      flex-wrap: wrap;
+    }
+
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid #7c3aed;
+      flex: none;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .doctor-name {
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .patient-name {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    .mode-toggle {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+      background: #1e293b;
+      border-radius: 9999px;
+      padding: 3px;
+    }
+
+    .mode-btn {
+      padding: 6px 16px;
+      border-radius: 9999px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .mode-btn.active {
+      background: #7c3aed;
+      color: white;
+    }
+
+    .gender-toggle {
+      display: flex;
+      gap: 6px;
+      margin-left: 12px;
+    }
+
+    .gender-btn {
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      cursor: pointer;
+      background: #1e293b;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    .gender-btn.active {
+      background: #7c3aed;
+      color: white;
+    }
+
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+      scroll-behavior: smooth;
+      background: #0a1120;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .user-row {
+      justify-content: flex-end;
+    }
+
+    .bubble {
+      max-width: 78%;
+      padding: 16px 20px;
+      border-radius: 20px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      position: relative;
+      font-size: 16px;
+    }
+
+    .ai {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-top-left-radius: 4px;
+    }
+
+    .user {
+      background: #7c3aed;
+      border-top-right-radius: 4px;
+    }
+
+    .listen-btn {
+      position: absolute;
+      right: 14px;
+      bottom: 12px;
+      font-size: 20px;
+      cursor: pointer;
+      opacity: 0.75;
+    }
+
+    .listen-btn:hover {
+      opacity: 1;
+    }
+
+    .image-preview {
+      max-width: 220px;
+      margin-top: 8px;
+      border-radius: 12px;
+    }
+
+    .inputbar {
+      display: flex;
+      gap: 12px;
+      padding: 18px 24px;
+      background: #020617;
+      border-top: 1px solid #1e293b;
+      align-items: end;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: #1e293b;
+      color: white;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 14px 18px;
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    button {
+      background: #7c3aed;
+      color: white;
+      border: none;
+      padding: 14px 22px;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    button.secondary {
+      background: #334155;
+    }
+
+    .mic-btn,
+    .image-btn {
+      font-size: 24px;
+      width: 58px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #7c3aed;
+      margin-bottom: 4px;
+      cursor: pointer;
+      flex: none;
+    }
+
+    .listening {
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    .logout-btn {
+      background: #334155;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 9999px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    .panel-wrapper {
+      border-top: 1px solid #1e293b;
+      background: #020617;
+    }
+
+    .panel-header {
+      padding: 12px 24px;
+      background: #1e293b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .panel-content {
+      padding: 20px;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    .card {
+      margin: 30px;
+      padding: 28px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      overflow: auto;
+    }
+
+    .box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 14px;
+    }
+
+    .hypothesis-box {
+      background: #111827;
+      border: 1px solid #4c1d95;
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 12px;
+      font-size: 14px;
+      color: #ddd6fe;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #334155;
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .metric {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 18px;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 24px;
+      margin-top: 8px;
+    }
+
+    @media(max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .mode-toggle {
+        margin-left: 0;
+      }
+
+      .bubble {
+        max-width: 92%;
+      }
+
+      .inputbar {
+        flex-wrap: wrap;
+      }
+    }
   </style>
 </head>
 
 <body>
-<div class="layout">
-  <div class="sidebar">
-    <div class="brand">DOCTORPD</div>
-    <div class="nav" onclick="showChat()">Clinical Chat</div>
-    <div class="nav" onclick="showDiagnostics()">Diagnostics</div>
-    <div class="nav" onclick="showDocumentation()">Documentation Assistant</div>
-    <div class="nav" onclick="showFunding()">Funding Estimator</div>
-    <div class="nav" onclick="showCases()">Case Tracking</div>
-    <div class="nav" onclick="showMetrics()">Metrics</div>
-    <div class="nav" onclick="showAudit()">Audit Trail</div>
-    <div style="margin-top:auto;padding-top:20px">
-      <button onclick="logout()" class="logout-btn">Logout</button>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="brand">DOCTORPD</div>
+      <div class="nav" onclick="showChat()">Clinical Chat</div>
+      <div class="nav" onclick="showDiagnostics()">Diagnostics</div>
+      <div class="nav" onclick="showDocumentation()">Documentation Assistant</div>
+      <div class="nav" onclick="showFunding()">Funding Estimator</div>
+      <div class="nav" onclick="showCases()">Case Tracking</div>
+      <div class="nav" onclick="showMetrics()">Metrics</div>
+      <div class="nav" onclick="showAudit()">Audit Trail</div>
+      <div style="margin-top:auto;padding-top:20px">
+        <button onclick="logout()" class="logout-btn">Logout</button>
+      </div>
     </div>
+
+    <div id="app" class="main"></div>
   </div>
-  <div id="app" class="main"></div>
-</div>
 
 <script>
 let currentUser = null;
@@ -80,26 +396,27 @@ let currentPatient = null;
 
 let conversation = freshConversation();
 
-function freshConversation(){
+function freshConversation() {
   return {
-    symptoms:"",
-    answers:[],
-    askedQuestions:[],
-    facts:{
-      mechanismKnown:false,
-      onsetKnown:false,
-      weightBearingKnown:false,
-      swellingKnown:false,
-      lockingKnown:false,
-      neurovascularKnown:false,
-      severityKnown:false
+    symptoms: "",
+    answers: [],
+    askedQuestions: [],
+    patient: null,
+    facts: {
+      mechanismKnown: false,
+      onsetKnown: false,
+      weightBearingKnown: false,
+      swellingKnown: false,
+      lockingKnown: false,
+      neurovascularKnown: false,
+      severityKnown: false
     },
-    clinicalState:{
-      suspectedCategory:null,
-      keyFindings:[],
-      missingCritical:[],
-      redFlagsChecked:[],
-      hypotheses:[]
+    clinicalState: {
+      suspectedCategory: null,
+      keyFindings: [],
+      missingCritical: [],
+      redFlagsChecked: [],
+      hypotheses: []
     }
   };
 }
@@ -118,53 +435,98 @@ let femaleVoice = null;
 let maleVoice = null;
 
 const doctorProfiles = {
-  female:{name:"Dr. Elena Voss",title:"DOCTORPD Clinical AI",avatar:"https://randomuser.me/api/portraits/women/44.jpg",voice:"female"},
-  male:{name:"Dr. James Harper",title:"DOCTORPD Clinical AI",avatar:"https://randomuser.me/api/portraits/men/32.jpg",voice:"male"}
+  female: {
+    name: "Dr. Elena Voss",
+    title: "DOCTORPD Clinical AI",
+    avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+    voice: "female"
+  },
+  male: {
+    name: "Dr. James Harper",
+    title: "DOCTORPD Clinical AI",
+    avatar: "https://randomuser.me/api/portraits/men/32.jpg",
+    voice: "male"
+  }
 };
 
-function escapeHtml(str=""){
+function escapeHtml(str = "") {
   return String(str)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function money(n){return "$"+Number(n||0).toLocaleString();}
-function scrollChat(){const chat=document.getElementById("chat");if(chat)chat.scrollTop=chat.scrollHeight;}
-function copyText(id){const el=document.getElementById(id);if(!el)return;navigator.clipboard.writeText(el.value);alert("Copied");}
+function money(n) {
+  return "$" + Number(n || 0).toLocaleString();
+}
 
-function resetConversation(){
+function scrollChat() {
+  const chat = document.getElementById("chat");
+  if (chat) chat.scrollTop = chat.scrollHeight;
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  navigator.clipboard.writeText(el.value);
+  alert("Copied");
+}
+
+function resetConversation() {
   conversation = freshConversation();
+  conversation.patient = currentPatient;
   latestAI = null;
   documentation = [];
   activePrompts = [];
   currentImageBase64 = null;
 }
 
-function addUnique(arr,value){
-  if(!value)return;
-  if(!arr.includes(value))arr.push(value);
+function detectIntent(text) {
+  const t = String(text || "").toLowerCase();
+
+  if (/(chest pain|can't breathe|cannot breathe|stroke|unconscious|severe bleeding|suicidal|kill myself|blue lips|facial droop|slurred speech)/.test(t)) {
+    return "emergency";
+  }
+
+  if (/(prevent|avoid|reduce risk|best way|what should i do to prevent|how do i prevent|lifestyle|diet|exercise|screening)/.test(t)) {
+    return "advice";
+  }
+
+  if (/(what is|explain|why does|how does|tell me about|difference between)/.test(t)) {
+    return "education";
+  }
+
+  if (/(pain|hurt|sore|swelling|fever|injury|twisted|cough|vomit|rash|symptom|dizzy|bleeding|unwell|neck|back|knee|chest|headache)/.test(t)) {
+    return "triage";
+  }
+
+  return "advice";
 }
 
-function updateFactsFromText(text){
-  const t = String(text || "").toLowerCase();
-  if(!t)return;
+function addUnique(arr, value) {
+  if (!value) return;
+  if (!arr.includes(value)) arr.push(value);
+}
 
-  if (/(twist|twisted|fell|fall|slipped|collision|tackle|hockey|sport|sports|landed|injury|injured|overuse|running|jumped)/.test(t)) {
+function updateFactsFromText(text) {
+  const t = String(text || "").toLowerCase();
+  if (!t) return;
+
+  if (/(twist|twisted|fell|fall|slipped|collision|tackle|hockey|sport|sports|landed|injury|injured|overuse|running|jumped|movement|lifted|lifting|bent|bending)/.test(t)) {
     conversation.facts.mechanismKnown = true;
     addUnique(conversation.clinicalState.keyFindings, "mechanism described");
   }
 
-  if (/(today|yesterday|last night|this morning|days?|weeks?|months?|hours?|started|began|since|ago|earlier)/.test(t)) {
+  if (/(today|yesterday|last night|this morning|days?|weeks?|months?|hours?|started|began|since|ago|earlier|woke up)/.test(t)) {
     conversation.facts.onsetKnown = true;
-    addUnique(conversation.clinicalState.keyFindings, "timing/onset described");
+    addUnique(conversation.clinicalState.keyFindings, "timing or onset described");
   }
 
-  if (/(can't walk|cant walk|cannot walk|couldn't walk|couldnt walk|can walk|walking|walked|bear weight|weight bear|limp|limping|stood up|stand on it|continue playing|kept playing|stopped playing)/.test(t)) {
+  if (/(can't walk|cant walk|cannot walk|couldn't walk|couldnt walk|can walk|walking|walked|bear weight|weight bear|limp|limping|stood up|stand on it|continue playing|kept playing|stopped playing|four steps|4 steps|use it|move it)/.test(t)) {
     conversation.facts.weightBearingKnown = true;
-    addUnique(conversation.clinicalState.keyFindings, "weight-bearing status described");
+    addUnique(conversation.clinicalState.keyFindings, "weight-bearing or function status described");
   }
 
   if (/(swelling|swollen|puffed|puffy|fluid|blew up|inflamed)/.test(t)) {
@@ -177,96 +539,132 @@ function updateFactsFromText(text){
     addUnique(conversation.clinicalState.keyFindings, "mechanical symptoms described");
   }
 
-  if (/(numb|tingling|cold|blue|pale|colour change|color change|weakness|can't feel|cant feel)/.test(t)) {
+  if (/(numb|tingling|cold|blue|pale|colour change|color change|weakness|can't feel|cant feel|pins and needles)/.test(t)) {
     conversation.facts.neurovascularKnown = true;
     addUnique(conversation.clinicalState.keyFindings, "neurovascular symptoms described");
   }
 
-  if (/(\b[0-9]\s*\/\s*10\b|\b10\s*out of\s*10\b|mild|moderate|severe|very painful|pain is)/.test(t)) {
+  if (/(\b[0-9]\s*\/\s*10\b|\b10\s*out of\s*10\b|mild|moderate|severe|very painful|pain is|bad pain|worst pain)/.test(t)) {
     conversation.facts.severityKnown = true;
     addUnique(conversation.clinicalState.keyFindings, "severity described");
   }
 }
 
-function loadVoices(){
-  if(!("speechSynthesis" in window))return;
-  const all=speechSynthesis.getVoices();
-  if(all.length===0)return;
-  voicesLoaded=true;
-  femaleVoice=all.find(v=>v.lang==="en-AU"&&/female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name))||all.find(v=>/female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name))||all[0];
-  maleVoice=all.find(v=>v.lang==="en-AU"&&/male|james|david|daniel|oliver|henry/i.test(v.name))||all.find(v=>/male|james|david|daniel|oliver|henry/i.test(v.name))||all[1]||all[0];
+function loadVoices() {
+  if (!("speechSynthesis" in window)) return;
+
+  const all = speechSynthesis.getVoices();
+  if (all.length === 0) return;
+
+  voicesLoaded = true;
+
+  femaleVoice =
+    all.find(v => v.lang === "en-AU" && /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) ||
+    all.find(v => /female|karen|tessa|alice|samantha|emma|olivia/i.test(v.name)) ||
+    all[0];
+
+  maleVoice =
+    all.find(v => v.lang === "en-AU" && /male|james|david|daniel|oliver|henry/i.test(v.name)) ||
+    all.find(v => /male|james|david|daniel|oliver|henry/i.test(v.name)) ||
+    all[1] ||
+    all[0];
 }
 
-if("speechSynthesis" in window){
-  speechSynthesis.onvoiceschanged=loadVoices;
+if ("speechSynthesis" in window) {
+  speechSynthesis.onvoiceschanged = loadVoices;
   loadVoices();
-  setTimeout(loadVoices,800);
+  setTimeout(loadVoices, 800);
 }
 
-function speak(text){
-  if(!("speechSynthesis" in window))return;
-  if(!voicesLoaded)loadVoices();
-  const clean=String(text||"").replace(/<[^>]*>/g,"");
-  const utterance=new SpeechSynthesisUtterance(clean);
-  const profile=doctorProfiles[currentDoctor];
-  utterance.voice=profile.voice==="female"?femaleVoice:maleVoice;
-  utterance.pitch=profile.voice==="female"?1.1:.95;
-  utterance.rate=.97;
+function speak(text) {
+  if (!("speechSynthesis" in window)) return;
+  if (!voicesLoaded) loadVoices();
+
+  const clean = String(text || "").replace(/<[^>]*>/g, "");
+  const utterance = new SpeechSynthesisUtterance(clean);
+  const profile = doctorProfiles[currentDoctor];
+
+  utterance.voice = profile.voice === "female" ? femaleVoice : maleVoice;
+  utterance.pitch = profile.voice === "female" ? 1.1 : 0.95;
+  utterance.rate = 0.97;
+
   speechSynthesis.cancel();
   speechSynthesis.speak(utterance);
 }
 
-function startVoiceInput(){
-  if(!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)){
+function startVoiceInput() {
+  if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
     alert("Voice input not supported in this browser.");
     return;
   }
-  const recognition=new (window.SpeechRecognition||window.webkitSpeechRecognition)();
-  recognition.lang="en-AU";
-  const micBtn=document.getElementById("micBtn");
-  if(micBtn)micBtn.classList.add("listening");
-  recognition.onresult=e=>{
-    const transcript=e.results[0][0].transcript;
-    const input=document.getElementById("input");
-    if(input){input.value=transcript;send();}
+
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang = "en-AU";
+
+  const micBtn = document.getElementById("micBtn");
+  if (micBtn) micBtn.classList.add("listening");
+
+  recognition.onresult = e => {
+    const transcript = e.results[0][0].transcript;
+    const input = document.getElementById("input");
+    if (input) {
+      input.value = transcript;
+      send();
+    }
   };
-  recognition.onerror=recognition.onend=()=>{if(micBtn)micBtn.classList.remove("listening");};
+
+  recognition.onerror = recognition.onend = () => {
+    if (micBtn) micBtn.classList.remove("listening");
+  };
+
   recognition.start();
 }
 
-function switchDoctor(gender){currentDoctor=gender;showChat();}
-function setMode(mode){chatMode=mode;resetConversation();showChat();}
-
-function togglePanel(){
-  panelOpen=!panelOpen;
-  const content=document.getElementById("panelContent");
-  const toggle=document.getElementById("panelToggle");
-  if(content)content.style.display=panelOpen?"block":"none";
-  if(toggle)toggle.innerText=panelOpen?"▼":"▲";
+function switchDoctor(gender) {
+  currentDoctor = gender;
+  showChat();
 }
 
-function logout(){
-  if(confirm("Logout?")){
+function setMode(mode) {
+  chatMode = mode;
+  resetConversation();
+  showChat();
+}
+
+function togglePanel() {
+  panelOpen = !panelOpen;
+
+  const content = document.getElementById("panelContent");
+  const toggle = document.getElementById("panelToggle");
+
+  if (content) content.style.display = panelOpen ? "block" : "none";
+  if (toggle) toggle.innerText = panelOpen ? "▼" : "▲";
+}
+
+function logout() {
+  if (confirm("Logout?")) {
     localStorage.removeItem("currentUser");
-    currentUser=null;
-    currentPatient=null;
+    currentUser = null;
+    currentPatient = null;
     resetConversation();
     showLogin();
   }
 }
 
-function checkAutoLogin(){
-  const saved=localStorage.getItem("currentUser");
-  if(saved){
-    currentUser=JSON.parse(saved);
+function checkAutoLogin() {
+  const saved = localStorage.getItem("currentUser");
+
+  if (saved) {
+    currentUser = JSON.parse(saved);
     showPatientSelection();
     return true;
   }
+
   return false;
 }
 
-function showLogin(){
-  document.getElementById("app").innerHTML=`
+function showLogin() {
+  document.getElementById("app").innerHTML = `
     <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#0a1120">
       <div style="background:#1e293b;padding:40px 50px;border-radius:20px;width:100%;max-width:400px">
         <h2 style="text-align:center;margin-bottom:30px;color:#7c3aed">DOCTORPD</h2>
@@ -278,93 +676,118 @@ function showLogin(){
     </div>`;
 }
 
-async function login(){
-  const email=document.getElementById("email").value.trim();
-  const password=document.getElementById("password").value.trim();
-  if(!email||!password)return alert("Please enter email and password");
+async function login() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
 
-  const res=await fetch("/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
-  const data=await res.json();
+  if (!email || !password) return alert("Please enter email and password");
 
-  if(data.success){
-    currentUser={email};
-    localStorage.setItem("currentUser",JSON.stringify(currentUser));
+  const res = await fetch("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+
+  const data = await res.json();
+
+  if (data.success) {
+    currentUser = { email };
+    localStorage.setItem("currentUser", JSON.stringify(currentUser));
     showPatientSelection();
-  }else{
-    alert(data.error||"Invalid email or password");
+  } else {
+    alert(data.error || "Invalid email or password");
   }
 }
 
-async function register(){
-  const email=document.getElementById("email").value.trim();
-  const password=document.getElementById("password").value.trim();
-  if(!email||!password)return alert("Please enter email and password");
+async function register() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
 
-  const res=await fetch("/auth/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password})});
-  const data=await res.json();
+  if (!email || !password) return alert("Please enter email and password");
 
-  if(data.success){
+  const res = await fetch("/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+
+  const data = await res.json();
+
+  if (data.success) {
     alert("Account created. Logging you in.");
-    currentUser={email};
-    localStorage.setItem("currentUser",JSON.stringify(currentUser));
+    currentUser = { email };
+    localStorage.setItem("currentUser", JSON.stringify(currentUser));
     showPatientSelection();
-  }else{
-    alert(data.error||"Registration failed");
+  } else {
+    alert(data.error || "Registration failed");
   }
 }
 
-function showPatientSelection(){
-  document.getElementById("app").innerHTML=`
+function showPatientSelection() {
+  document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Welcome, ${escapeHtml(currentUser.email)}</h2>
       <button onclick="createNewPatient()" style="margin-bottom:20px">+ New Patient</button>
       <div id="patientList"></div>
     </div>`;
+
   loadPatients();
 }
 
-function loadPatients(){
-  const patients=JSON.parse(localStorage.getItem("patients_"+currentUser.email)||"[]");
-  const list=document.getElementById("patientList");
+function loadPatients() {
+  const patients = JSON.parse(localStorage.getItem("patients_" + currentUser.email) || "[]");
+  const list = document.getElementById("patientList");
 
-  if(!patients.length){
-    list.innerHTML=`<div class="box">No patients yet. Create a new patient to begin.</div>`;
+  if (!patients.length) {
+    list.innerHTML = `<div class="box">No patients yet. Create a new patient to begin.</div>`;
     return;
   }
 
-  list.innerHTML=patients.map(p=>`
+  list.innerHTML = patients.map(p => `
     <div onclick="selectPatient('${p.id}')" class="box" style="cursor:pointer">
       <strong>${escapeHtml(p.name)}</strong> • ${escapeHtml(p.age)} • ${escapeHtml(p.gender)}
     </div>
   `).join("");
 }
 
-function createNewPatient(){
-  const name=prompt("Patient full name:");
-  if(!name)return;
-  const age=prompt("Age:")||"";
-  const gender=prompt("Gender (M/F/Other):")||"";
-  const patient={id:Date.now().toString(),name,age,gender};
-  let patients=JSON.parse(localStorage.getItem("patients_"+currentUser.email)||"[]");
+function createNewPatient() {
+  const name = prompt("Patient full name:");
+  if (!name) return;
+
+  const age = prompt("Age:") || "";
+  const gender = prompt("Gender (M/F/Other):") || "";
+
+  const patient = {
+    id: Date.now().toString(),
+    name,
+    age,
+    gender
+  };
+
+  let patients = JSON.parse(localStorage.getItem("patients_" + currentUser.email) || "[]");
   patients.push(patient);
-  localStorage.setItem("patients_"+currentUser.email,JSON.stringify(patients));
+
+  localStorage.setItem("patients_" + currentUser.email, JSON.stringify(patients));
+
   showPatientSelection();
 }
 
-function selectPatient(id){
-  const patients=JSON.parse(localStorage.getItem("patients_"+currentUser.email)||"[]");
-  currentPatient=patients.find(p=>p.id===id);
+function selectPatient(id) {
+  const patients = JSON.parse(localStorage.getItem("patients_" + currentUser.email) || "[]");
+
+  currentPatient = patients.find(p => p.id === id);
+
   resetConversation();
   showChat();
 }
 
-function showChat(){
-  if(!currentUser)return showLogin();
-  if(!currentPatient)return showPatientSelection();
+function showChat() {
+  if (!currentUser) return showLogin();
+  if (!currentPatient) return showPatientSelection();
 
-  const doctor=doctorProfiles[currentDoctor];
+  const doctor = doctorProfiles[currentDoctor];
 
-  document.getElementById("app").innerHTML=`
+  document.getElementById("app").innerHTML = `
     <div class="doctor">
       <div class="avatar"><img src="${doctor.avatar}" alt="Doctor"></div>
       <div>
@@ -373,13 +796,13 @@ function showChat(){
       </div>
 
       <div class="mode-toggle">
-        <div class="mode-btn ${chatMode==="guided"?"active":""}" onclick="setMode('guided')">Guided Triage</div>
-        <div class="mode-btn ${chatMode==="free"?"active":""}" onclick="setMode('free')">Ask Doctor Anything</div>
+        <div class="mode-btn ${chatMode === "guided" ? "active" : ""}" onclick="setMode('guided')">Guided Triage</div>
+        <div class="mode-btn ${chatMode === "free" ? "active" : ""}" onclick="setMode('free')">Ask Doctor Anything</div>
       </div>
 
       <div class="gender-toggle">
-        <div class="gender-btn ${currentDoctor==="female"?"active":""}" onclick="switchDoctor('female')">👩‍⚕️ Female</div>
-        <div class="gender-btn ${currentDoctor==="male"?"active":""}" onclick="switchDoctor('male')">👨‍⚕️ Male</div>
+        <div class="gender-btn ${currentDoctor === "female" ? "active" : ""}" onclick="switchDoctor('female')">👩‍⚕️ Female</div>
+        <div class="gender-btn ${currentDoctor === "male" ? "active" : ""}" onclick="switchDoctor('male')">👨‍⚕️ Male</div>
       </div>
 
       <button onclick="showPatientSelection()" class="secondary" style="margin-left:12px;padding:8px 16px;font-size:14px">Switch Patient</button>
@@ -391,10 +814,10 @@ function showChat(){
     <div class="panel-wrapper">
       <div class="panel-header" onclick="togglePanel()">
         <span>📋 Clinical Tools</span>
-        <span id="panelToggle">${panelOpen?"▼":"▲"}</span>
+        <span id="panelToggle">${panelOpen ? "▼" : "▲"}</span>
       </div>
 
-      <div id="panelContent" class="panel-content" style="display:${panelOpen?"block":"none"}">
+      <div id="panelContent" class="panel-content" style="display:${panelOpen ? "block" : "none"}">
         <b>Structured Clinical Note</b>
         <textarea id="note"></textarea>
         <button onclick="generateNote()">Generate Note</button>
@@ -418,7 +841,7 @@ function showChat(){
     </div>
 
     <div class="inputbar">
-      <input id="input" placeholder="${chatMode==="free"?"Ask DOCTORPD anything...":"Describe symptoms or answer naturally..."}"/>
+      <input id="input" placeholder="${chatMode === "free" ? "Ask DOCTORPD anything..." : "Describe symptoms or answer naturally..."}"/>
 
       <label class="image-btn" title="Upload image">📸
         <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
@@ -430,36 +853,47 @@ function showChat(){
     </div>
   `;
 
-  document.getElementById("input").addEventListener("keydown",e=>{
-    if(e.key==="Enter"){e.preventDefault();send();}
+  document.getElementById("input").addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      send();
+    }
   });
 
   addAI(`Hi, I'm ${doctor.name.split(" ")[1]}. How can I help you today?`);
 }
 
-function handleImageUpload(e){
-  const file=e.target.files[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=function(ev){
-    currentImageBase64=ev.target.result.split(",")[1];
-    const chat=document.getElementById("chat");
-    chat.innerHTML+=`
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(ev) {
+    currentImageBase64 = ev.target.result.split(",")[1];
+
+    const chat = document.getElementById("chat");
+
+    chat.innerHTML += `
       <div class="row user-row">
         <div style="max-width:220px">
           <img src="${ev.target.result}" class="image-preview">
         </div>
       </div>`;
+
     scrollChat();
   };
+
   reader.readAsDataURL(file);
 }
 
-function addAI(text){
-  const chat=document.getElementById("chat");
-  if(!chat)return;
-  const safe=escapeHtml(text);
-  chat.innerHTML+=`
+function addAI(text) {
+  const chat = document.getElementById("chat");
+  if (!chat) return;
+
+  const safe = escapeHtml(text);
+
+  chat.innerHTML += `
     <div class="row">
       <div class="avatar" style="width:42px;height:42px">
         <img src="${doctorProfiles[currentDoctor].avatar}">
@@ -469,255 +903,272 @@ function addAI(text){
         <span class="listen-btn" onclick="speak(this.parentElement.innerText)">🔊</span>
       </div>
     </div>`;
+
   scrollChat();
-  if(!String(text).includes("Thinking"))speak(text);
+
+  if (!String(text).includes("Thinking")) speak(text);
 }
 
-function addHypothesesBox(hypotheses=[], reasoning=""){
-  if(!hypotheses.length && !reasoning)return;
-  const chat=document.getElementById("chat");
-  if(!chat)return;
+function addHypothesesBox(hypotheses = [], reasoning = "") {
+  if (!hypotheses.length && !reasoning) return;
 
-  let html=`<div class="row"><div class="hypothesis-box">`;
+  const chat = document.getElementById("chat");
+  if (!chat) return;
 
-  if(reasoning){
-    html+=`<strong>Why I’m asking:</strong><br>${escapeHtml(reasoning)}<br><br>`;
+  let html = `<div class="row"><div class="hypothesis-box">`;
+
+  if (reasoning) {
+    html += `<strong>Why I’m asking:</strong><br>${escapeHtml(reasoning)}<br><br>`;
   }
 
-  if(hypotheses.length){
-    html+=`<strong>Current working hypotheses:</strong><br>`;
-    hypotheses.slice(0,3).forEach(h=>{
-      html+=`• ${escapeHtml(h.condition||"Condition")} — ${escapeHtml(h.probability??"N/A")}%<br>`;
+  if (hypotheses.length) {
+    html += `<strong>Current working hypotheses:</strong><br>`;
+    hypotheses.slice(0, 3).forEach(h => {
+      html += `• ${escapeHtml(h.condition || "Condition")} — ${escapeHtml(h.probability ?? "N/A")}%<br>`;
     });
   }
 
-  html+=`</div></div>`;
-  chat.innerHTML+=html;
+  html += `</div></div>`;
+
+  chat.innerHTML += html;
   scrollChat();
 }
 
-function addUser(text){
-  const chat=document.getElementById("chat");
-  if(!chat)return;
-  chat.innerHTML+=`
+function addUser(text) {
+  const chat = document.getElementById("chat");
+  if (!chat) return;
+
+  chat.innerHTML += `
     <div class="row user-row">
       <div class="bubble user">${escapeHtml(text)}</div>
     </div>`;
+
   scrollChat();
 }
 
-function removeThinkingBubble(){
-  const chat=document.getElementById("chat");
-  if(chat&&chat.lastElementChild)chat.lastElementChild.remove();
+function removeThinkingBubble() {
+  const chat = document.getElementById("chat");
+  if (chat && chat.lastElementChild) chat.lastElementChild.remove();
 }
 
-async function send(){
-  if(isWaiting)return;
+async function send() {
+  if (isWaiting) return;
 
-  const input=document.getElementById("input");
-  const text=input.value.trim();
+  const input = document.getElementById("input");
+  const text = input.value.trim();
 
-  if(!text&&!currentImageBase64)return;
+  if (!text && !currentImageBase64) return;
 
-  if(text)addUser(text);
+  if (text) addUser(text);
 
   updateFactsFromText(text);
 
-  input.value="";
-  isWaiting=true;
+  const intent = detectIntent(text);
+  const effectiveMode = intent === "triage" || intent === "emergency" ? "guided" : "free";
+
+  input.value = "";
+  isWaiting = true;
 
   addAI("Thinking...");
 
-  try{
-    let res,data;
+  try {
+    let res;
+    let data;
 
-    if(chatMode==="free"){
-      const payload={
-        question:text||"[Image uploaded for analysis]",
-        context:conversation,
-        imageBase64:currentImageBase64
+    if (effectiveMode === "free") {
+      const payload = {
+        question: text || "[Image uploaded for analysis]",
+        context: { ...conversation, patient: currentPatient },
+        imageBase64: currentImageBase64,
+        intent
       };
 
-      res=await fetch("/ai/ask-doctor",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(payload)
+      res = await fetch("/ai/ask-doctor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
 
-      data=await res.json();
+      data = await res.json();
       removeThinkingBubble();
-      addAI(data.response||"Sorry, I could not process that question.");
-    }else{
-      if(!conversation.symptoms&&text){
-        conversation.symptoms=text;
-      }else if(text){
+      addAI(data.response || "Sorry, I could not process that question.");
+    } else {
+      if (!conversation.symptoms && text) {
+        conversation.symptoms = text;
+      } else if (text) {
         conversation.answers.push(text);
       }
 
-      const payload={
+      const payload = {
         ...conversation,
-        currentText:text,
-        imageBase64:currentImageBase64,
-        patient:currentPatient
+        currentText: text,
+        imageBase64: currentImageBase64,
+        patient: currentPatient,
+        intent
       };
 
-      res=await fetch("/ai/personal-check",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(payload)
+      res = await fetch("/ai/personal-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
 
-      data=await res.json();
-
+      data = await res.json();
       removeThinkingBubble();
 
-      if(data.mode==="question"){
-        latestAI=data;
+      if (data.mode === "question") {
+        latestAI = data;
 
-        if(data.question){
+        if (data.question) {
           conversation.askedQuestions.push(data.question);
         }
 
-        if(data.clinicalState){
-          conversation.clinicalState={
+        if (data.clinicalState) {
+          conversation.clinicalState = {
             ...conversation.clinicalState,
             ...data.clinicalState
           };
         }
 
-        if(data.hypotheses?.length){
-          conversation.clinicalState.hypotheses=data.hypotheses;
+        if (data.hypotheses?.length) {
+          conversation.clinicalState.hypotheses = data.hypotheses;
         }
 
-        addAI(data.question||"Can you tell me a little more?");
-        addHypothesesBox(conversation.clinicalState.hypotheses||[],data.reasoning||"");
-      }else if(data.mode==="final"){
-        latestAI=data;
+        addAI(data.question || "Can you tell me a little more?");
+        addHypothesesBox(conversation.clinicalState.hypotheses || [], data.reasoning || "");
+      } else if (data.mode === "final") {
+        latestAI = data;
 
-        if(data.clinicalState){
-          conversation.clinicalState={
+        if (data.clinicalState) {
+          conversation.clinicalState = {
             ...conversation.clinicalState,
             ...data.clinicalState
           };
         }
 
         renderFinal(data);
-      }else{
-        addAI(data.overall_assessment||data.error||"Sorry, I couldn't process that.");
+      } else {
+        addAI(data.overall_assessment || data.error || "Sorry, I couldn't process that.");
       }
     }
-  }catch(err){
+  } catch (err) {
     removeThinkingBubble();
     addAI("Sorry, something went wrong connecting to the server. Please check the backend is running.");
     console.error(err);
-  }finally{
-    currentImageBase64=null;
-    isWaiting=false;
+  } finally {
+    currentImageBase64 = null;
+    isWaiting = false;
   }
 }
 
-function renderFinal(data){
-  activePrompts=data.revenue_prompts||[];
-  let out="";
+function renderFinal(data) {
+  activePrompts = data.revenue_prompts || [];
+  let out = "";
 
-  out+=`Triage Score: ${data.triage_score??"N/A"}/100\n`;
-  out+=`Urgency: ${data.urgency||"N/A"}\n`;
-  out+=`Confidence: ${data.confidence||"N/A"}%\n`;
-  out+=`Uncertainty: ${data.uncertainty||"N/A"}\n\n`;
-  out+=`Assessment:\n${data.overall_assessment||"Not recorded"}\n\n`;
+  out += `Triage Score: ${data.triage_score ?? "N/A"}/100\n`;
+  out += `Urgency: ${data.urgency || "N/A"}\n`;
+  out += `Confidence: ${data.confidence || "N/A"}%\n`;
+  out += `Uncertainty: ${data.uncertainty || "N/A"}\n\n`;
+  out += `Assessment:\n${data.overall_assessment || "Not recorded"}\n\n`;
 
-  if(data.differential?.length){
-    out+="Differential Ranking:\n";
-    data.differential.forEach((d,index)=>{
-      out+=`${d.rank||index+1}. ${d.condition||"Condition"} — ${d.probability??"N/A"}% (${d.likelihood||"Possible"})\n`;
-      out+=`Reasoning: ${d.reasoning||"Not stated"}\n`;
-      out+=`ICD: ${d.icd_suggestion?.code||"N/A"} — ${d.icd_suggestion?.description||""}\n`;
+  if (data.differential?.length) {
+    out += "Differential Ranking:\n";
+
+    data.differential.forEach((d, index) => {
+      out += `${d.rank || index + 1}. ${d.condition || "Condition"} — ${d.probability ?? "N/A"}% (${d.likelihood || "Possible"})\n`;
+      out += `Reasoning: ${d.reasoning || "Not stated"}\n`;
+      out += `ICD: ${d.icd_suggestion?.code || "N/A"} — ${d.icd_suggestion?.description || ""}\n`;
     });
-    out+="\n";
+
+    out += "\n";
   }
 
-  if(data.conditions?.length){
-    out+="Possible Conditions:\n";
-    data.conditions.forEach(c=>{
-      out+=`• ${c.name} (${c.likelihood}) — ${c.reason}\n`;
+  if (data.conditions?.length) {
+    out += "Possible Conditions:\n";
+
+    data.conditions.forEach(c => {
+      out += `• ${c.name} (${c.likelihood}) — ${c.reason}\n`;
     });
-    out+="\n";
+
+    out += "\n";
   }
 
-  if(data.icd){
-    out+=`ICD-10 Suggestion:\n${data.icd.code} (${data.icd.description}) — ${data.icd.confidence||"N/A"}%\n\n`;
+  if (data.icd) {
+    out += `ICD-10 Suggestion:\n${data.icd.code} (${data.icd.description}) — ${data.icd.confidence || "N/A"}%\n\n`;
   }
 
-  out+=`CPT Suggestion: ${data.cpt||"N/A"}\n`;
-  out+=`Denial Risk: ${data.denial_risk||"N/A"}\n\n`;
+  out += `CPT Suggestion: ${data.cpt || "N/A"}\n`;
+  out += `Denial Risk: ${data.denial_risk || "N/A"}\n\n`;
 
-  if(data.missing_information?.length){
-    out+="Missing Information:\n";
-    data.missing_information.forEach(m=>out+=`• ${m}\n`);
-    out+="\n";
+  if (data.missing_information?.length) {
+    out += "Missing Information:\n";
+    data.missing_information.forEach(m => out += `• ${m}\n`);
+    out += "\n";
   }
 
-  if(data.funding){
-    out+=`Funding Insight:\n`;
-    out+=`Baseline: ${money(data.funding.baseline)}\n`;
-    out+=`Potential: ${money(data.funding.potential)}\n`;
-    out+=`Uplift: ${money(data.funding.uplift)}\n\n`;
+  if (data.funding) {
+    out += `Funding Insight:\n`;
+    out += `Baseline: ${money(data.funding.baseline)}\n`;
+    out += `Potential: ${money(data.funding.potential)}\n`;
+    out += `Uplift: ${money(data.funding.uplift)}\n\n`;
   }
 
-  if(data.advice){
-    out+=`Advice:\n${data.advice}\n\n`;
+  if (data.advice) {
+    out += `Advice:\n${data.advice}\n\n`;
   }
 
-  out+=data.legal_notice||"Decision support only. Requires clinician review.";
+  out += data.legal_notice || "Decision support only. Requires clinician review.";
 
   addAI(out);
 
-  if(activePrompts.length){
-    let htmlText="Documentation Opportunities:\n";
-    activePrompts.forEach(p=>{
-      htmlText+=`• ${p.message} → ${money(p.value||p.estimated_uplift)}\n`;
-      documentation.push(`${p.message} → ${money(p.value||p.estimated_uplift)}`);
+  if (activePrompts.length) {
+    let htmlText = "Documentation Opportunities:\n";
+
+    activePrompts.forEach(p => {
+      htmlText += `• ${p.message} → ${money(p.value || p.estimated_uplift)}\n`;
+      documentation.push(`${p.message} → ${money(p.value || p.estimated_uplift)}`);
     });
+
     addAI(htmlText);
   }
 }
 
-function generateNote(){
-  const note=`
+function generateNote() {
+  const note = `
 LEGAL NOTICE:
 Decision support only. Requires clinician review.
 
 PRESENTING COMPLAINT:
-${conversation.symptoms||"Not recorded"}
+${conversation.symptoms || "Not recorded"}
 
 RESPONSES:
-${conversation.answers.join("\n")||"Not recorded"}
+${conversation.answers.join("\n") || "Not recorded"}
 
 QUESTIONS ASKED:
-${conversation.askedQuestions.join("\n")||"Not recorded"}
+${conversation.askedQuestions.join("\n") || "Not recorded"}
 
 KNOWN FACTS:
-${JSON.stringify(conversation.facts,null,2)}
+${JSON.stringify(conversation.facts, null, 2)}
 
 CURRENT HYPOTHESES:
-${(conversation.clinicalState?.hypotheses||[]).map(h=>`${h.condition} — ${h.probability}%`).join("\n")||"Not recorded"}
+${(conversation.clinicalState?.hypotheses || []).map(h => `${h.condition} — ${h.probability}%`).join("\n") || "Not recorded"}
 
 ASSESSMENT:
-${latestAI?.overall_assessment||"Not recorded"}
+${latestAI?.overall_assessment || "Not recorded"}
 
 DIFFERENTIAL:
-${(latestAI?.differential||[]).map(d=>`${d.rank}. ${d.condition} (${d.probability}%) ICD: ${d.icd_suggestion?.code||"N/A"}`).join("\n")||"Not recorded"}
+${(latestAI?.differential || []).map(d => `${d.rank}. ${d.condition} (${d.probability}%) ICD: ${d.icd_suggestion?.code || "N/A"}`).join("\n") || "Not recorded"}
 
 ICD:
-${latestAI?.icd?.code||"N/A"} - ${latestAI?.icd?.description||"N/A"}
+${latestAI?.icd?.code || "N/A"} - ${latestAI?.icd?.description || "N/A"}
 
 TRIAGE:
-Score: ${latestAI?.triage_score||"N/A"}
-Urgency: ${latestAI?.urgency||"N/A"}
-Confidence: ${latestAI?.confidence||"N/A"}
+Score: ${latestAI?.triage_score || "N/A"}
+Urgency: ${latestAI?.urgency || "N/A"}
+Confidence: ${latestAI?.confidence || "N/A"}
 
 DOCUMENTATION OPPORTUNITIES:
-${documentation.join("\n")||"None"}
+${documentation.join("\n") || "None"}
 
 PLAN:
 - Clinician review required.
@@ -726,44 +1177,74 @@ PLAN:
 - Escalate if red flags or worsening symptoms.
 `.trim();
 
-  const el=document.getElementById("note");
-  if(el)el.value=note;
+  const el = document.getElementById("note");
+  if (el) el.value = note;
 }
 
-function generateFHIR(){
-  const bundle={
-    resourceType:"Bundle",
-    type:"collection",
-    timestamp:new Date().toISOString(),
-    entry:[
-      {resource:{resourceType:"Patient",id:currentPatient?.id||"patient-demo",name:[{text:currentPatient?.name||"Demo patient"}]}},
-      {resource:{resourceType:"Condition",code:{text:`${latestAI?.icd?.code||"N/A"} ${latestAI?.icd?.description||""}`},note:[{text:latestAI?.overall_assessment||""}]}},
-      {resource:{resourceType:"Observation",code:{text:"AI triage score"},valueInteger:latestAI?.triage_score||0}},
-      {resource:{resourceType:"Observation",code:{text:"AI confidence score"},valueInteger:latestAI?.confidence||0}}
+function generateFHIR() {
+  const bundle = {
+    resourceType: "Bundle",
+    type: "collection",
+    timestamp: new Date().toISOString(),
+    entry: [
+      {
+        resource: {
+          resourceType: "Patient",
+          id: currentPatient?.id || "patient-demo",
+          name: [{ text: currentPatient?.name || "Demo patient" }]
+        }
+      },
+      {
+        resource: {
+          resourceType: "Condition",
+          code: {
+            text: `${latestAI?.icd?.code || "N/A"} ${latestAI?.icd?.description || ""}`
+          },
+          note: [{ text: latestAI?.overall_assessment || "" }]
+        }
+      },
+      {
+        resource: {
+          resourceType: "Observation",
+          code: { text: "AI triage score" },
+          valueInteger: latestAI?.triage_score || 0
+        }
+      },
+      {
+        resource: {
+          resourceType: "Observation",
+          code: { text: "AI confidence score" },
+          valueInteger: latestAI?.confidence || 0
+        }
+      }
     ]
   };
 
-  const el=document.getElementById("fhir");
-  if(el)el.value=JSON.stringify(bundle,null,2);
+  const el = document.getElementById("fhir");
+  if (el) el.value = JSON.stringify(bundle, null, 2);
 }
 
-async function submitOverride(){
-  const payload={
-    clinician:document.getElementById("overrideName").value,
-    reason:document.getElementById("overrideReason").value,
-    assessment:document.getElementById("overrideAssessment").value,
-    original:latestAI
+async function submitOverride() {
+  const payload = {
+    clinician: document.getElementById("overrideName").value,
+    reason: document.getElementById("overrideReason").value,
+    assessment: document.getElementById("overrideAssessment").value,
+    original: latestAI
   };
 
-  await fetch("/clinical/override",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+  await fetch("/clinical/override", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
 
-  documentation.push("CLINICIAN OVERRIDE: "+payload.assessment+" | Reason: "+payload.reason);
+  documentation.push("CLINICIAN OVERRIDE: " + payload.assessment + " | Reason: " + payload.reason);
   generateNote();
   alert("Override logged");
 }
 
-function showDiagnostics(){
-  document.getElementById("app").innerHTML=`
+function showDiagnostics() {
+  document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Diagnostics</h2>
       <textarea id="diagDescription" placeholder="Describe issue or image findings..."></textarea>
@@ -773,32 +1254,38 @@ function showDiagnostics(){
     </div>`;
 }
 
-async function runDiagnostics(){
-  const description=document.getElementById("diagDescription").value;
-  const file=document.getElementById("diagImage").files[0];
-  let imageBase64="";
+async function runDiagnostics() {
+  const description = document.getElementById("diagDescription").value;
+  const file = document.getElementById("diagImage").files[0];
 
-  if(file){
-    imageBase64=await new Promise(resolve=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result.split(",")[1]);
+  let imageBase64 = "";
+
+  if (file) {
+    imageBase64 = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
       reader.readAsDataURL(file);
     });
   }
 
-  const res=await fetch("/ai/diagnostics-assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({description,imageBase64})});
-  const d=await res.json();
+  const res = await fetch("/ai/diagnostics-assist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description, imageBase64 })
+  });
 
-  document.getElementById("diagOut").innerHTML=`
-    <div class="box"><b>Assessment</b><br>${escapeHtml(d.image_assessment||"")}</div>
-    <div class="box"><b>Triage</b><br>${escapeHtml(d.triage?.score||"N/A")} — ${escapeHtml(d.triage?.urgency||"N/A")}</div>
-    <div class="box"><b>Possible Conditions</b><br>${(d.possible_conditions||[]).map(x=>"• "+escapeHtml(x.name)+" — "+escapeHtml(x.reason)).join("<br>")}</div>
-    <div class="box"><b>Imaging</b><br>${(d.recommended_diagnostics?.imaging||[]).map(x=>escapeHtml(x.test)+" — "+escapeHtml(x.reason)).join("<br>")}</div>
-    <div class="box"><b>Pathology</b><br>${(d.recommended_diagnostics?.pathology||[]).map(x=>escapeHtml(x.test)+" — "+escapeHtml(x.reason)).join("<br>")||"None suggested"}</div>`;
+  const d = await res.json();
+
+  document.getElementById("diagOut").innerHTML = `
+    <div class="box"><b>Assessment</b><br>${escapeHtml(d.image_assessment || "")}</div>
+    <div class="box"><b>Triage</b><br>${escapeHtml(d.triage?.score || "N/A")} — ${escapeHtml(d.triage?.urgency || "N/A")}</div>
+    <div class="box"><b>Possible Conditions</b><br>${(d.possible_conditions || []).map(x => "• " + escapeHtml(x.name) + " — " + escapeHtml(x.reason)).join("<br>")}</div>
+    <div class="box"><b>Imaging</b><br>${(d.recommended_diagnostics?.imaging || []).map(x => escapeHtml(x.test) + " — " + escapeHtml(x.reason)).join("<br>")}</div>
+    <div class="box"><b>Pathology</b><br>${(d.recommended_diagnostics?.pathology || []).map(x => escapeHtml(x.test) + " — " + escapeHtml(x.reason)).join("<br>") || "None suggested"}</div>`;
 }
 
-function showDocumentation(){
-  document.getElementById("app").innerHTML=`
+function showDocumentation() {
+  document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Documentation Assistant</h2>
       <textarea id="docText" placeholder="Paste clinical note here..."></textarea>
@@ -807,21 +1294,26 @@ function showDocumentation(){
     </div>`;
 }
 
-async function analyseDoc(){
-  const note=document.getElementById("docText").value;
+async function analyseDoc() {
+  const note = document.getElementById("docText").value;
 
-  const res=await fetch("/ai/clinical-assist",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note})});
-  const d=await res.json();
+  const res = await fetch("/ai/clinical-assist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note })
+  });
 
-  document.getElementById("docOut").innerHTML=`
-    <div class="box"><b>Suggestions</b><br>${(d.suggestions||[]).map(x=>"• "+escapeHtml(x)).join("<br>")}</div>
-    <div class="box"><b>Funding Prompts</b><br>${(d.funding_prompts||[]).map(x=>"• "+escapeHtml(x.prompt||x.message)+" → "+money(x.estimated_uplift||x.value)).join("<br>")}</div>
-    <div class="box"><b>ICD Opportunities</b><br>${(d.icd_opportunities||[]).map(x=>"• "+escapeHtml(x.indicative_code||x.code)+" — "+escapeHtml(x.description)+" — "+escapeHtml(x.documentation_needed||"")).join("<br>")}</div>
-    <div class="box"><b>Audit Risks</b><br>${(d.audit_risks||[]).map(x=>"• "+escapeHtml(x)).join("<br>")}</div>`;
+  const d = await res.json();
+
+  document.getElementById("docOut").innerHTML = `
+    <div class="box"><b>Suggestions</b><br>${(d.suggestions || []).map(x => "• " + escapeHtml(x)).join("<br>")}</div>
+    <div class="box"><b>Funding Prompts</b><br>${(d.funding_prompts || []).map(x => "• " + escapeHtml(x.prompt || x.message) + " → " + money(x.estimated_uplift || x.value)).join("<br>")}</div>
+    <div class="box"><b>ICD Opportunities</b><br>${(d.icd_opportunities || []).map(x => "• " + escapeHtml(x.indicative_code || x.code) + " — " + escapeHtml(x.description) + " — " + escapeHtml(x.documentation_needed || "")).join("<br>")}</div>
+    <div class="box"><b>Audit Risks</b><br>${(d.audit_risks || []).map(x => "• " + escapeHtml(x)).join("<br>")}</div>`;
 }
 
-function showFunding(){
-  document.getElementById("app").innerHTML=`
+function showFunding() {
+  document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Funding Estimator</h2>
       <input id="dx" placeholder="Enter diagnosis">
@@ -830,60 +1322,81 @@ function showFunding(){
     </div>`;
 }
 
-async function runFunding(){
-  const diagnosis=document.getElementById("dx").value;
+async function runFunding() {
+  const diagnosis = document.getElementById("dx").value;
 
-  const res=await fetch("/drg/estimate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({diagnosis})});
-  const d=await res.json();
+  const res = await fetch("/drg/estimate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ diagnosis })
+  });
 
-  document.getElementById("fundingOut").innerHTML=`
+  const d = await res.json();
+
+  document.getElementById("fundingOut").innerHTML = `
     <div class="box">
       <b>Predicted Funding:</b> ${money(d.funding)}<br>
       <b>Baseline:</b> ${money(d.baseline)}<br>
       <b>Potential:</b> ${money(d.potential)}<br>
       <b>Uplift:</b> ${money(d.uplift)}<br><br>
       <b>Documentation Needed:</b><br>
-      ${(d.documentation_needed||[]).map(x=>"• "+escapeHtml(x)).join("<br>")}
+      ${(d.documentation_needed || []).map(x => "• " + escapeHtml(x)).join("<br>")}
       <br><br>
       <input id="actualFunding" placeholder="Actual funding">
-      <button onclick="saveCase(${Number(d.funding||0)})">Save Case</button>
+      <button onclick="saveCase(${Number(d.funding || 0)})">Save Case</button>
     </div>`;
 }
 
-async function saveCase(predicted){
-  const actual=Number(document.getElementById("actualFunding").value||0);
+async function saveCase(predicted) {
+  const actual = Number(document.getElementById("actualFunding").value || 0);
 
-  await fetch("/pilot/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({patientName:currentPatient?.name||"Demo patient",predicted,actual})});
+  await fetch("/pilot/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      patientName: currentPatient?.name || "Demo patient",
+      predicted,
+      actual
+    })
+  });
+
   alert("Saved");
 }
 
-async function showCases(){
-  const res=await fetch("/pilot/data");
-  const rows=await res.json();
+async function showCases() {
+  const res = await fetch("/pilot/data");
+  const rows = await res.json();
 
-  document.getElementById("app").innerHTML=`
+  document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Case Tracking</h2>
       <table>
-        <tr><th>ID</th><th>Patient</th><th>Predicted</th><th>Actual</th><th>Variance</th><th>Date</th></tr>
-        ${rows.map(r=>`
+        <tr>
+          <th>ID</th>
+          <th>Patient</th>
+          <th>Predicted</th>
+          <th>Actual</th>
+          <th>Variance</th>
+          <th>Date</th>
+        </tr>
+        ${rows.map(r => `
           <tr>
             <td>${escapeHtml(r.id)}</td>
             <td>${escapeHtml(r.patientName)}</td>
             <td>${money(r.predicted)}</td>
             <td>${money(r.actual)}</td>
-            <td>${money(Number(r.actual)-Number(r.predicted))}</td>
+            <td>${money(Number(r.actual) - Number(r.predicted))}</td>
             <td>${new Date(r.created_at).toLocaleString()}</td>
           </tr>`).join("")}
       </table>
     </div>`;
 }
 
-async function showMetrics(){
-  const res=await fetch("/pilot/metrics");
-  const d=await res.json();
+async function showMetrics() {
+  const res = await fetch("/pilot/metrics");
+  const d = await res.json();
 
-  document.getElementById("app").innerHTML=`
+  document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Metrics</h2>
       <div class="metric-grid">
@@ -895,26 +1408,30 @@ async function showMetrics(){
     </div>`;
 }
 
-async function showAudit(){
-  const res=await fetch("/audit/data");
-  const rows=await res.json();
+async function showAudit() {
+  const res = await fetch("/audit/data");
+  const rows = await res.json();
 
-  document.getElementById("app").innerHTML=`
+  document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Audit Trail</h2>
       <table>
-        <tr><th>Time</th><th>Action</th><th>Details</th></tr>
-        ${rows.map(r=>`
+        <tr>
+          <th>Time</th>
+          <th>Action</th>
+          <th>Details</th>
+        </tr>
+        ${rows.map(r => `
           <tr>
             <td>${new Date(r.timestamp).toLocaleString()}</td>
             <td>${escapeHtml(r.action)}</td>
-            <td><pre>${escapeHtml(JSON.stringify(r.details,null,2))}</pre></td>
+            <td><pre>${escapeHtml(JSON.stringify(r.details, null, 2))}</pre></td>
           </tr>`).join("")}
       </table>
     </div>`;
 }
 
-if(!checkAutoLogin()){
+if (!checkAutoLogin()) {
   showLogin();
 }
 </script>
